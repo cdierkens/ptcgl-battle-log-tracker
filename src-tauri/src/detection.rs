@@ -4,7 +4,7 @@ use crate::buttons::{
     battle_log_needles, battle_log_region, battle_log_sweep_region, continue_needles, continue_region,
     drawer_title_region,
 };
-use crate::coords::crop_frame;
+use crate::coords::crop_game;
 use crate::ports::{Frame, TextMatch, TextRecognizer};
 
 /// Consecutive polls with neither signal before results count as gone.
@@ -84,7 +84,7 @@ impl<T: TextRecognizer> OcrResultsProbe<T> {
     }
 
     fn region_has_battle_log(&self, frame: &Frame, region: crate::coords::RelativeRect) -> bool {
-        crop_frame(frame, region)
+        crop_game(frame, region)
             .map(|crop| !self.ocr.find_text(&crop.frame, &battle_log_needles()).is_empty())
             .unwrap_or(false)
     }
@@ -98,7 +98,7 @@ impl<T: TextRecognizer> ResultsProbe for OcrResultsProbe<T> {
             // crop-local coordinates, so they must be offset by the crop
             // origin before the y-threshold test — without this a match is
             // judged at the wrong row.
-            let Some(crop) = crop_frame(frame, battle_log_sweep_region()) else {
+            let Some(crop) = crop_game(frame, battle_log_sweep_region()) else {
                 return false;
             };
             return self.ocr.find_text(&crop.frame, &battle_log_needles()).iter().any(|m| {
@@ -114,7 +114,7 @@ impl<T: TextRecognizer> ResultsProbe for OcrResultsProbe<T> {
     }
 
     fn find_continue(&self, frame: &Frame) -> Option<TextMatch> {
-        let crop = crop_frame(frame, continue_region())?;
+        let crop = crop_game(frame, continue_region())?;
         let m = self.ocr.find_text(&crop.frame, &continue_needles()).into_iter().next()?;
         Some(TextMatch { x: m.x + crop.origin_x, y: m.y + crop.origin_y, ..m })
     }
@@ -146,8 +146,10 @@ mod tests {
         }
     }
 
+    /// A windowed-style frame: no black bars, so the 256x144 game picture sits
+    /// below a 6px "title bar".
     fn frame() -> Frame {
-        Frame { width: 256, height: 150, rgba: vec![0u8; 256 * 150 * 4] }
+        Frame { width: 256, height: 150, rgba: vec![128u8; 256 * 150 * 4] }
     }
 
     fn label(text: &str, y: u32) -> TextMatch {
@@ -155,7 +157,7 @@ mod tests {
     }
 
     fn band_origin(frame: &Frame) -> (u32, u32) {
-        let crop = crop_frame(frame, battle_log_sweep_region()).unwrap();
+        let crop = crop_game(frame, battle_log_sweep_region()).unwrap();
         (crop.origin_x, crop.origin_y)
     }
 
@@ -168,9 +170,9 @@ mod tests {
     #[test]
     fn sweep_offsets_matches_by_the_crop_origin() {
         let frame = frame();
-        // Band origin in a 256x150 frame is (round(0.20*256), round(0.65*150)).
-        assert_eq!(band_origin(&frame), (51, 98));
-        // A match at crop-local y=5 is really at y=103. Un-offset it would be
+        // Band origin is (round(0.20*256), round(6 + 0.63*144)).
+        assert_eq!(band_origin(&frame), (51, 97));
+        // A match at crop-local y=5 is really at y=102. Un-offset it would be
         // judged at y=5 and rejected as a drawer header, so this fails if the
         // crop-origin correction is dropped.
         assert!(!is_results_screen_tab(&label("Battle Log", 5), &frame));
@@ -184,7 +186,7 @@ mod tests {
 
     #[test]
     fn sweeping_a_zero_sized_frame_is_false() {
-        // `crop_frame` rejects zero-sized frames, so the sweep reports nothing
+        // `crop_game` rejects zero-sized frames, so the sweep reports nothing
         // rather than treating the frame as showing the tab.
         let empty = Frame { width: 0, height: 0, rgba: Vec::new() };
         assert!(!OcrResultsProbe::new(FixedOcr(vec![label("Battle Log", 5)])).tab_visible(&empty, true));
@@ -198,10 +200,10 @@ mod tests {
 
     #[test]
     fn find_continue_maps_the_cropped_match_back_to_the_frame() {
-        // 256x150 frame: continue_region starts at (round(0.40*256), round(0.90*150)) = (102, 135).
+        // continue_region starts at (round(0.40*256), round(6 + 0.89*144)) = (102, 134).
         let probe = OcrResultsProbe::new(FixedOcr(vec![label("Continue", 3), label("Continue", 9)]));
         let m = probe.find_continue(&frame()).unwrap();
-        assert_eq!((m.x, m.y), (100 + 102, 3 + 135));
+        assert_eq!((m.x, m.y), (100 + 102, 3 + 134));
     }
 
     #[test]

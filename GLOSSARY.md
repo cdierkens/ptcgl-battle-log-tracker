@@ -38,6 +38,11 @@ _Avoid_: scraping, auto-export, automation
 Recognising, by reading the screen, that PTCG Live is showing the results screen.
 _Avoid_: trigger, hook
 
+**Game picture**:
+The 16:9 area of a PTCG Live capture that the game actually draws, without the title bar
+or the black bars macOS adds in fullscreen. Results detection measures its regions from it.
+_Avoid_: viewport, canvas, game area
+
 **Warm-up**:
 The startup period, up to about a minute after a fresh install or update, while the OS
 text recognizer loads. Results detection and clipboard auto-save are off; the capture

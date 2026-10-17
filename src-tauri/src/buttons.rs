@@ -31,47 +31,42 @@ pub fn continue_needles() -> Vec<String> {
 }
 
 /// Region of the results screen where the "Battle Log" tab label renders, as
-/// fractions of the captured frame. Measured from the live client across three
-/// separate matches: the tab's top-left sat at x=1220, y=1213 in the
-/// 2560x1496 capture every time (only its width varied 119..127px with the
-/// localized label length). This rect pads that box with margin while staying
-/// ~1.5% of the frame, so recognizing it is ~4x cheaper than the full window.
+/// fractions of the game picture (`coords::game_picture`). Measured live: the
+/// tab's top-left sat at x=1220, y=1157 of the 2560x1440 picture across three
+/// matches (only its width varied 119..127px with the localized label length),
+/// and at y 0.80 of the picture fullscreen on a 16:10 display. Padded with
+/// margin while staying ~1.5% of the frame, so recognizing it is ~4x cheaper
+/// than the full window.
 pub fn battle_log_region() -> RelativeRect {
-    RelativeRect { x0: 0.43, y0: 0.76, x1: 0.58, y1: 0.86 }
+    RelativeRect { x0: 0.43, y0: 0.75, x1: 0.58, y1: 0.86 }
 }
 
 /// Safety-net region for the results-screen Battle Log tab, as fractions of the
-/// captured frame. Used by the periodic sweep in place of a whole-frame OCR:
-/// the measured tab box sits at x 0.43-0.58, y 0.76-0.86 and the open drawer's
-/// header tab sits near y 0.06, so a lower band covers tab drift while still
-/// excluding the drawer.
+/// game picture. Used by the periodic sweep in place of a whole-frame OCR: a
+/// lower band covers tab drift while still excluding the open drawer's header
+/// tab near the top.
 ///
-/// The rect below is the spec's proposal, not a measured placement: the cost of
-/// scanning *a* band is known, but this band's bounds have not yet been confirmed
-/// against a live results screen. Timings, measured on a 2560x1496 capture
-/// back-to-back with the whole-frame sweep this replaces: 140.6ms versus 221.4ms,
-/// holding at 36-58% across three runs. The tighter `band-tight` candidate
-/// (x 0.30-0.70, y 0.70-0.92) measured 124.9ms, but it was not chosen — Vision's
-/// cost flattens well before full-frame size (a 1.5Mpx band and the 3.8Mpx whole
-/// frame both cost ~250ms), so the wider band's extra pixels cost almost nothing
+/// The band's bounds are a proposal, not a measured placement. Timings, measured
+/// on a 2560x1496 capture back-to-back with the whole-frame sweep this replaces:
+/// 140.6ms versus 221.4ms, holding at 36-58% across three runs. A tighter band
+/// (x 0.30-0.70, y 0.70-0.92) measured 124.9ms, but Vision's cost flattens well
+/// before full-frame size, so the wider band's extra pixels cost almost nothing
 /// and margin is the entire purpose of a safety net.
-///
-/// Absolute OCR figures are not comparable across runs (Vision's cost varies with
-/// on-screen content); the back-to-back ratios are.
 pub fn battle_log_sweep_region() -> RelativeRect {
-    RelativeRect { x0: 0.20, y0: 0.65, x1: 0.80, y1: 0.95 }
+    RelativeRect { x0: 0.20, y0: 0.63, x1: 0.80, y1: 0.95 }
 }
 
 /// Region of the results screen where the Continue button label renders, as
-/// fractions of the captured frame. Measured live: "CONTINUE" at x 0.470–0.531,
-/// y 0.939–0.961 of a 2560x1496 capture; padded so localized labels still fit.
+/// fractions of the game picture. Measured live: "CONTINUE" at x 0.470-0.531,
+/// y 0.937-0.960 windowed and y 0.940-0.956 fullscreen; padded so localized
+/// labels still fit.
 pub fn continue_region() -> RelativeRect {
-    RelativeRect { x0: 0.40, y0: 0.90, x1: 0.60, y1: 1.0 }
+    RelativeRect { x0: 0.40, y0: 0.89, x1: 0.60, y1: 1.0 }
 }
 
-/// Region at the top of the window where the open Battle Log drawer shows its
-/// own "Battle Log" title. Seeing it keeps the results screen "present" while
-/// the drawer covers the results-screen tab.
+/// Region at the top of the game picture where the open Battle Log drawer shows
+/// its own "Battle Log" title. Seeing it keeps the results screen "present"
+/// while the drawer covers the results-screen tab.
 pub fn drawer_title_region() -> RelativeRect {
     RelativeRect { x0: 0.0, y0: 0.0, x1: 1.0, y1: 0.25 }
 }
@@ -103,8 +98,8 @@ mod tests {
     }
 
     /// Measured top-edge y of the open drawer's own "Battle Log" header, as a
-    /// fraction of the frame (y=92 of a 1496px capture).
-    const DRAWER_HEADER_Y: f32 = 92.0 / 1496.0;
+    /// fraction of the game picture (y=92 of a 1496px capture, below a 56px title bar).
+    const DRAWER_HEADER_Y: f32 = (92.0 - 56.0) / 1440.0;
 
     #[test]
     fn sweep_band_excludes_the_drawer_header() {
