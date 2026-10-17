@@ -5,15 +5,22 @@
 //! - Other: no-op stub
 
 #[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(target_os = "macos")]
+use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
 use objc2::runtime::AnyObject;
 #[cfg(target_os = "macos")]
 use objc2::AnyThread;
 #[cfg(target_os = "macos")]
-use objc2_foundation::{NSArray, NSData, NSDictionary};
+use objc2_foundation::{NSArray, NSData, NSDictionary, NSError};
 #[cfg(target_os = "macos")]
 use objc2_vision::{
     VNImageOption, VNImageRequestHandler, VNRecognizeTextRequest, VNRequest, VNRequestTextRecognitionLevel,
 };
+#[cfg(target_os = "macos")]
+use tracing::warn;
 
 #[cfg(target_os = "macos")]
 use crate::bmp::encode_bmp;
@@ -74,24 +81,56 @@ impl TextRecognizer for PlatformTextRecognizer {
 pub struct VisionTextRecognizer;
 
 #[cfg(target_os = "macos")]
+static ACCURATE_FAILED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "macos")]
+fn recognize(
+    frame: &Frame,
+    level: VNRequestTextRecognitionLevel,
+) -> Result<Retained<VNRecognizeTextRequest>, Option<Retained<NSError>>> {
+    let bmp = encode_bmp(frame).ok_or(None)?;
+    let data = NSData::with_bytes(&bmp);
+    let options = NSDictionary::<VNImageOption, AnyObject>::new();
+    let handler = VNImageRequestHandler::initWithData_options(VNImageRequestHandler::alloc(), &data, &options);
+    let request = VNRecognizeTextRequest::new();
+    request.setRecognitionLevel(level);
+    request.setUsesLanguageCorrection(false);
+    let requests = NSArray::<VNRequest>::from_slice(&[&*request]);
+    handler.performRequests_error(&requests).map(|()| request).map_err(Some)
+}
+
+/// Fast recognition drops small labels at native capture size; a smooth 2x
+/// upscale makes it reliable. Boxes are normalized, so callers are unaffected.
+#[cfg(target_os = "macos")]
+fn recognize_fast(frame: &Frame) -> Option<Retained<VNRecognizeTextRequest>> {
+    use xcap::image::{imageops, RgbaImage};
+    let img = RgbaImage::from_raw(frame.width, frame.height, frame.rgba.clone())?;
+    let big = imageops::resize(&img, frame.width * 2, frame.height * 2, imageops::FilterType::Triangle);
+    let big = Frame { width: big.width(), height: big.height(), rgba: big.into_raw() };
+    recognize(&big, VNRequestTextRecognitionLevel::Fast).ok()
+}
+
+#[cfg(target_os = "macos")]
 impl VisionTextRecognizer {
     fn scan(&self, frame: &Frame, needles: &[String], kind: MatchKind) -> Vec<TextMatch> {
-        let Some(bmp) = encode_bmp(frame) else {
+        let request = if ACCURATE_FAILED.load(Ordering::Relaxed) {
+            recognize_fast(frame)
+        } else {
+            match recognize(frame, VNRequestTextRecognitionLevel::Accurate) {
+                Ok(request) => Some(request),
+                Err(None) => None,
+                Err(Some(e)) => {
+                    // Accurate can fail system-wide (Neural Engine model compile timeouts) and
+                    // each attempt stalls ~60s, so stay on fast for the rest of the session.
+                    ACCURATE_FAILED.store(true, Ordering::Relaxed);
+                    warn!("accurate text recognition failed, using fast from now on: {}", e.localizedDescription());
+                    recognize_fast(frame)
+                }
+            }
+        };
+        let Some(request) = request else {
             return Vec::new();
         };
-
-        let data = NSData::with_bytes(&bmp);
-        let options = NSDictionary::<VNImageOption, AnyObject>::new();
-        let handler = VNImageRequestHandler::initWithData_options(VNImageRequestHandler::alloc(), &data, &options);
-
-        let request = VNRecognizeTextRequest::new();
-        request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
-        request.setUsesLanguageCorrection(false);
-
-        let requests = NSArray::<VNRequest>::from_slice(&[&*request]);
-        if handler.performRequests_error(&requests).is_err() {
-            return Vec::new();
-        }
         let Some(results) = request.results() else {
             return Vec::new();
         };
@@ -188,10 +227,39 @@ fn normalize(s: &str) -> String {
 /// True when `text` is one of the needles. Matching is whole-string
 /// (case-insensitive) so a stray fragment that happens to appear inside a
 /// needle — e.g. "LO" inside "Battle Log" — cannot be mistaken for the button.
+/// Fast recognition reads label icons as a short leading token ("o BATTLE LOG")
+/// and garbles single letters, so that token is dropped and needles of
+/// [`FUZZY_MIN_CHARS`]+ characters tolerate one edit.
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn matches_needle(text: &str, needles: &[String]) -> bool {
     let norm = normalize(text);
-    needles.iter().any(|n| *n == norm)
+    let without_icon = norm.split_once(' ').filter(|(head, _)| head.chars().count() <= 2).map(|(_, rest)| rest);
+    let matches = |candidate: &str| {
+        needles
+            .iter()
+            .any(|n| n == candidate || (n.chars().count() >= FUZZY_MIN_CHARS && edit_distance(n, candidate) <= 1))
+    };
+    matches(&norm) || without_icon.is_some_and(matches)
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
+const FUZZY_MIN_CHARS: usize = 8;
+
+/// Levenshtein distance over chars.
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut diag = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let next = (diag + usize::from(ca != *cb)).min(row[j] + 1).min(row[j + 1] + 1);
+            diag = row[j + 1];
+            row[j + 1] = next;
+        }
+    }
+    row[b.len()]
 }
 
 /// True when `text` *contains* one of the needles as a substring, ignoring
@@ -237,6 +305,26 @@ mod tests {
         assert!(!matches_needle("LO", &needles()));
         assert!(!matches_needle("Log", &needles()));
         assert!(!matches_needle("Expor", &needles()));
+    }
+
+    #[test]
+    fn matches_fast_mode_icon_prefix_and_typo() {
+        assert!(matches_needle("o BATTLE LOG", &needles()));
+        assert!(matches_needle("Ql BATTLE LOG", &needles()));
+        assert!(matches_needle("o BAThLE LOG", &needles()));
+        assert!(!matches_needle("BArrLE LOG", &needles()));
+        assert!(!matches_needle("o Expor", &needles()));
+        assert!(!matches_needle("o LO", &needles()));
+        assert!(!matches_needle("Battle", &needles()));
+    }
+
+    #[test]
+    fn edit_distance_counts_single_edits() {
+        assert_eq!(edit_distance("battle log", "battle log"), 0);
+        assert_eq!(edit_distance("battle log", "bathle log"), 1);
+        assert_eq!(edit_distance("battle log", "battle lo"), 1);
+        assert_eq!(edit_distance("battle log", "barrle log"), 2);
+        assert_eq!(edit_distance("", "abc"), 3);
     }
 
     #[test]
