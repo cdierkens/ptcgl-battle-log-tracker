@@ -80,7 +80,7 @@ impl OverlayPresenter for TauriOverlayPresenter {
 }
 
 fn build_overlay(app: &AppHandle, label: &'static str, focusable: bool) -> Result<(), OverlayError> {
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title(label)
         .decorations(false)
         .transparent(true)
@@ -94,37 +94,34 @@ fn build_overlay(app: &AppHandle, label: &'static str, focusable: bool) -> Resul
         .visible_on_all_workspaces(true)
         .visible(false)
         .build()
-        .map(|_| ())
-        .map_err(|e| OverlayError::Window { label, reason: e.to_string() })
+        .map_err(|e| OverlayError::Window { label, reason: e.to_string() })?;
+    // A plain window still works everywhere except over fullscreen games.
+    if let Err(e) = into_panel(&window, label) {
+        tracing::warn!("overlay stays a plain window, so it won't show over fullscreen: {e}");
+    }
+    Ok(())
 }
 
 /// How long to wait for the main thread to run an AppKit call.
 #[cfg(target_os = "macos")]
 const MAIN_THREAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Float above a fullscreen game (status-bar level, every Space, fullscreen
-/// auxiliary) and show without making the window key, so the game keeps
-/// keyboard focus (Tauri's `show()` is `makeKeyAndOrderFront` on macOS).
-/// Waits for the main thread so failures reach the engine and are retried.
+/// Runs `f` on this window's `NSWindow` on the main thread and waits for it, so
+/// failures reach the caller (the engine retries).
 #[cfg(target_os = "macos")]
-fn raise(window: &WebviewWindow, label: &'static str) -> Result<(), OverlayError> {
-    use objc2_app_kit::{NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
-
+fn with_ns_window(
+    window: &WebviewWindow,
+    label: &'static str,
+    f: impl FnOnce(&objc2_app_kit::NSWindow) -> Result<(), String> + Send + 'static,
+) -> Result<(), OverlayError> {
     let (done, result) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
     let target = window.clone();
     // Tauri runs this inline when already on the main thread, so waiting cannot deadlock.
     window
         .run_on_main_thread(move || {
-            let outcome = target.ns_window().map_err(|e| e.to_string()).map(|ptr| {
+            let outcome = target.ns_window().map_err(|e| e.to_string()).and_then(|ptr| {
                 // SAFETY: Tauri returns this window's live NSWindow, and we are on the main thread.
-                let ns_window: &NSWindow = unsafe { &*ptr.cast::<NSWindow>() };
-                ns_window.setLevel(NSStatusWindowLevel);
-                ns_window.setCollectionBehavior(
-                    ns_window.collectionBehavior()
-                        | NSWindowCollectionBehavior::CanJoinAllSpaces
-                        | NSWindowCollectionBehavior::FullScreenAuxiliary,
-                );
-                ns_window.orderFrontRegardless();
+                f(unsafe { &*ptr.cast::<objc2_app_kit::NSWindow>() })
             });
             let _ = done.send(outcome);
         })
@@ -133,6 +130,87 @@ fn raise(window: &WebviewWindow, label: &'static str) -> Result<(), OverlayError
         Ok(outcome) => outcome.map_err(|reason| OverlayError::Window { label, reason }),
         Err(_) => Err(OverlayError::Window { label, reason: "timed out waiting for the main thread".into() }),
     }
+}
+
+/// Turns the window into a non-activating `NSPanel`. Since macOS 10.14 a regular
+/// app's plain `NSWindow` can't float over another app's fullscreen Space, even
+/// with `FullScreenAuxiliary`; a non-activating panel can, and it takes key
+/// (for paste) without activating the app.
+#[cfg(target_os = "macos")]
+fn into_panel(window: &WebviewWindow, label: &'static str) -> Result<(), OverlayError> {
+    use objc2::runtime::AnyObject;
+    use objc2_app_kit::{NSStatusWindowLevel, NSWindowCollectionBehavior, NSWindowStyleMask};
+
+    with_ns_window(window, label, move |ns_window| {
+        let panel_class = panel_class();
+        let object: &AnyObject = ns_window.as_ref();
+        if panel_class.instance_size() != object.class().instance_size() {
+            return Err("overlay panel class doesn't match the Tauri window layout".into());
+        }
+        // SAFETY: the panel class is NSPanel (an NSWindow) plus TaoWindow's one `focusable`
+        // ivar, so sizes match (checked above); tao looks the ivar up by name, so it still
+        // resolves, and the value tao stored carries over in place. TaoWindow's other
+        // overrides are dropped: canBecomeKey is re-added below, and its sendEvent
+        // (drag-by-background) is unused by overlays.
+        unsafe { AnyObject::set_class(object, panel_class) };
+        ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+        // Panels hide whenever their app deactivates, and this app is almost never active.
+        ns_window.setHidesOnDeactivate(false);
+        ns_window.setLevel(NSStatusWindowLevel);
+        ns_window.setCollectionBehavior(
+            ns_window.collectionBehavior()
+                | NSWindowCollectionBehavior::CanJoinAllSpaces
+                | NSWindowCollectionBehavior::FullScreenAuxiliary,
+        );
+        Ok(())
+    })
+}
+
+/// The overlay `NSPanel` subclass. It carries TaoWindow's only ivar, `focusable`,
+/// so the layout matches and tao's reads and writes of it keep working.
+#[cfg(target_os = "macos")]
+fn panel_class() -> &'static objc2::runtime::AnyClass {
+    use std::sync::OnceLock;
+
+    use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
+    use objc2::{class, sel};
+
+    extern "C-unwind" fn can_become_key(this: &AnyObject, _: Sel) -> Bool {
+        let ivar = this.class().instance_variable(c"focusable").expect("panel class declares `focusable`");
+        // SAFETY: the ivar is declared as `Bool` below.
+        unsafe { *ivar.load::<Bool>(this) }
+    }
+    extern "C-unwind" fn no(_: &AnyObject, _: Sel) -> Bool {
+        Bool::NO
+    }
+
+    static CLASS: OnceLock<&'static AnyClass> = OnceLock::new();
+    CLASS.get_or_init(|| {
+        let mut builder =
+            ClassBuilder::new(c"PtcglOverlayPanel", class!(NSPanel)).expect("overlay panel class registered once");
+        builder.add_ivar::<Bool>(c"focusable");
+        // SAFETY: both selectors are `- (BOOL)` getters on NSWindow.
+        unsafe {
+            builder.add_method(sel!(canBecomeKeyWindow), can_become_key as extern "C-unwind" fn(_, _) -> _);
+            builder.add_method(sel!(canBecomeMainWindow), no as extern "C-unwind" fn(_, _) -> _);
+        }
+        builder.register()
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn into_panel(_window: &WebviewWindow, _label: &'static str) -> Result<(), OverlayError> {
+    Ok(())
+}
+
+/// Shows without making the window key, so the game keeps keyboard focus
+/// (Tauri's `show()` is `makeKeyAndOrderFront` on macOS).
+#[cfg(target_os = "macos")]
+fn raise(window: &WebviewWindow, label: &'static str) -> Result<(), OverlayError> {
+    with_ns_window(window, label, |ns_window| {
+        ns_window.orderFrontRegardless();
+        Ok(())
+    })
 }
 
 #[cfg(not(target_os = "macos"))]
