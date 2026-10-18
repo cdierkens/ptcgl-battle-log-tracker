@@ -9,6 +9,12 @@ Tauri 2 (Rust) + React, shadcn/ui on Tailwind v4. Battle logs are parsed with
 [`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser).
 macOS today; Windows is planned. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
+### Demo
+
+[![PTCGL Tracker demo](https://github.com/cdierkens/ptcgl-battle-log-capture/releases/download/v0.1.0/PTCGL%20Tracker%20Demo%20(final2).mp4)](https://github.com/cdierkens/ptcgl-battle-log-capture/releases/tag/v0.1.0)
+
+39 seconds: results screen → Capture Drawer → "Synced to Pokodojo".
+
 ## Install (macOS)
 
 Download the latest release from [GitHub Releases](https://github.com/cdierkens/ptcgl-battle-log-capture/releases):
