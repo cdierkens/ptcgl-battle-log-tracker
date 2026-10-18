@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:windows": "vite build && cd src-tauri && PATH=\"$(brew --prefix llvm)/bin:$PATH\" cargo xwin build --release --features custom-protocol --target x86_64-pc-windows-msvc",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

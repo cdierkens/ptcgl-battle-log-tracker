@@ -34,6 +34,16 @@ To try log sync without a real site, run `pnpm sync-stub` and paste the config i
 prints into Settings → Sync. Only debug builds accept its `http://localhost` URL.
 `STUB_STATUS=401 pnpm sync-stub` forces a status (401 shows needs attention).
 
+### Windows support — coming soon
+
+Windows is planned but not yet supported. The non-macOS capture/OCR ports are
+stubs, and no Windows binaries are published. Follow-up spec #3 (Windows support)
+covers the port; it ships through the release pipeline, not as a cross-compiled
+`.exe` from macOS.
+
+If you'd like to help test Windows builds, open an issue and we'll coordinate
+once the release spec lands.
+
 ## Where things live
 
 - **Saved logs:** `~/.ptcgl-battle-logs` by default. Change it in Settings.
