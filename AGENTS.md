@@ -1,4 +1,4 @@
-# ptcgl-battle-log-capture
+# ptcgl-battle-log-tracker
 
 Desktop companion ("PTCGL Tracker") that watches Pokémon TCG Live, spots the
 match results screen, and saves the battle log. Tauri 2 (Rust) + React. Public,

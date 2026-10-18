@@ -11,13 +11,13 @@ macOS today; Windows is planned. Terms are defined in [GLOSSARY.md](GLOSSARY.md)
 
 ### Demo
 
-[![PTCGL Tracker demo](https://github.com/cdierkens/ptcgl-battle-log-capture/releases/download/v0.1.0/PTCGL%20Tracker%20Demo%20(final2).mp4)](https://github.com/cdierkens/ptcgl-battle-log-capture/releases/tag/v0.1.0)
+[![PTCGL Tracker demo](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/download/v0.1.0/PTCGL%20Tracker%20Demo%20(final2).mp4)](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/tag/v0.1.0)
 
 39 seconds: results screen → Capture Drawer → "Synced to Pokodojo".
 
 ## Install (macOS)
 
-Download the latest release from [GitHub Releases](https://github.com/cdierkens/ptcgl-battle-log-capture/releases):
+Download the latest release from [GitHub Releases](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases):
 
 - **PTCGL Tracker_0.1.0_aarch64.dmg** — disk image, drag to Applications
 - **PTCGL Tracker_0.1.0_aarch64.app.zip** — zipped app bundle
@@ -97,7 +97,7 @@ CI runs these on macOS, plus a compile-and-test job on Windows.
 **Vision cold start.** The first OCR call in a new binary takes about 35–80 s;
 later calls take 0.1–1 s. Every rebuild is a new binary, so right after a build
 results detection is blind for about a minute
-([#2](https://github.com/cdierkens/ptcgl-battle-log-capture/issues/2)).
+([#2](https://github.com/cdierkens/ptcgl-battle-log-tracker/issues/2)).
 
 **Debug vs release.** xcap and image build optimised even in dev
 (`[profile.dev.package.xcap]`). Without that, xcap's per-pixel copy of the

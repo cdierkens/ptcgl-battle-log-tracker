@@ -77,8 +77,8 @@ winget install Microsoft.EdgeWebView2Runtime
 **Build:**
 ```powershell
 # Clone or copy the repo to VM
-git clone https://github.com/cdierkens/ptcgl-battle-log-capture.git
-cd ptcgl-battle-log-capture
+git clone https://github.com/cdierkens/ptcgl-battle-log-tracker.git
+cd ptcgl-battle-log-tracker
 
 pnpm install --frozen-lockfile
 pnpm tauri build
