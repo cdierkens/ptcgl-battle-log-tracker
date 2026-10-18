@@ -11,9 +11,9 @@ macOS today; Windows is planned. Terms are defined in [GLOSSARY.md](GLOSSARY.md)
 
 ### Demo
 
-[![PTCGL Tracker demo](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/download/v0.1.0/demo-thumbnail.jpg)](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/download/v0.1.0/PTCGL%20Tracker%20Demo%20(final2).mp4)
+![PTCGL Tracker demo](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/download/v0.1.0/demo.gif)
 
-39 seconds: results screen → Capture Drawer → "Synced to Pokodojo". Click the image to watch.
+39 seconds: results screen → Capture Drawer → "Synced to Pokodojo". [Download the MP4](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/download/v0.1.0/PTCGL%20Tracker%20Demo%20(final2).mp4) if the GIF doesn't play.
 
 ## Install (macOS)
 
