@@ -9,7 +9,18 @@ Tauri 2 (Rust) + React, shadcn/ui on Tailwind v4. Battle logs are parsed with
 [`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser).
 macOS today; Windows is planned. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
-No binaries are published yet. Build it from source.
+## Install (macOS)
+
+Download the latest release from [GitHub Releases](https://github.com/cdierkens/ptcgl-battle-log-capture/releases):
+
+- **PTCGL Tracker_0.1.0_aarch64.dmg** — disk image, drag to Applications
+- **PTCGL Tracker_0.1.0_aarch64.app.zip** — zipped app bundle
+
+On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog.
+
+This is an unsigned, ad-hoc-signed MVP build. Notarization and auto-updates come in a later release.
+
+## Run from source
 
 ## Requirements
 
