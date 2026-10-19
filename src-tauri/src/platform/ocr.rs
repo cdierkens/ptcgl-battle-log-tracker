@@ -1,7 +1,7 @@
 //! Text recognition for the capture engine.
 //!
 //! - macOS: Vision framework (VNRecognizeTextRequest)
-//! - Windows: Windows.Media.Ocr (built-in, Windows 10+) — stub for CI, implement on VM
+//! - Windows: Windows.Media.Ocr (WinRT; built in on Windows 10+)
 //! - Other: no-op stub
 
 #[cfg(target_os = "macos")]
@@ -25,6 +25,23 @@ use tracing::warn;
 #[cfg(target_os = "macos")]
 use crate::bmp::encode_bmp;
 use crate::ports::{Frame, TextMatch, TextRecognizer};
+
+#[cfg(target_os = "windows")]
+use std::sync::{Mutex, OnceLock};
+#[cfg(target_os = "windows")]
+use tracing::warn;
+#[cfg(target_os = "windows")]
+use windows::core::HSTRING;
+#[cfg(target_os = "windows")]
+use windows::Globalization::Language;
+#[cfg(target_os = "windows")]
+use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
+#[cfg(target_os = "windows")]
+use windows::Media::Ocr::{OcrEngine, OcrLine};
+#[cfg(target_os = "windows")]
+use windows::Storage::Streams::DataWriter;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 
 /// Platform-specific text recognizer.
 /// - macOS: Vision framework
@@ -189,23 +206,194 @@ impl TextRecognizer for VisionTextRecognizer {
 
 // ===== Windows OCR Implementation =====
 //
-// Currently a compile-only stub. Full implementation requires testing on Windows VM
-// due to Windows.Media.Ocr API differences from documentation.
+// Uses Windows.Media.Ocr (WinRT) via the `windows` crate 0.58.
+//
+// The frame is handed to OCR as a BGRA8 `SoftwareBitmap`. WinRT has no
+// zero-copy window into existing bytes, so the pixels are copied through a
+// `DataWriter` into a WinRT buffer. OCR returns one `OcrLine` per line of text
+// and, unlike Vision, gives bounding rects only per `OcrWord`, so each line's
+// words are unioned into a single line rect. That mirrors the macOS path, which
+// reports one box per recognized line.
 #[cfg(target_os = "windows")]
 #[derive(Clone, Copy)]
 struct WindowsOcrRecognizer;
 
+/// The recognizer is free-threaded (`OcrEngine` is `Send + Sync`), so a
+/// process-wide cache avoids reloading the model on every poll. `None` records
+/// that no recognizer language is installed, which retrying cannot fix.
+#[cfg(target_os = "windows")]
+fn ocr_engine() -> Option<&'static Mutex<OcrEngine>> {
+    static ENGINE: OnceLock<Option<Mutex<OcrEngine>>> = OnceLock::new();
+    ENGINE.get_or_init(|| create_engine().map(Mutex::new)).as_ref()
+}
+
+#[cfg(target_os = "windows")]
+fn create_engine() -> Option<OcrEngine> {
+    if let Ok(engine) = OcrEngine::TryCreateFromUserProfileLanguages() {
+        return Some(engine);
+    }
+    // The user profile may carry no OCR-capable language; try the locales the
+    // game ships in, then whatever is installed, before giving up.
+    for tag in ["en-US", "en-GB", "es-ES", "fr-FR", "de-DE"] {
+        if let Ok(language) = Language::CreateLanguage(&HSTRING::from(tag)) {
+            if let Ok(engine) = OcrEngine::TryCreateFromLanguage(&language) {
+                return Some(engine);
+            }
+        }
+    }
+    if let Ok(languages) = OcrEngine::AvailableRecognizerLanguages() {
+        for language in languages {
+            if let Ok(engine) = OcrEngine::TryCreateFromLanguage(&language) {
+                return Some(engine);
+            }
+        }
+    }
+    warn!("no Windows OCR recognizer language is installed");
+    None
+}
+
+/// Windows Runtime calls require the calling thread to be initialized. Both the
+/// engine's poll thread and the warm-up thread call this. `RoInitialize` is
+/// idempotent per thread, so a failure just means the thread was already
+/// initialized — ignore it. The flag keeps the per-thread init count from
+/// growing on every poll.
+#[cfg(target_os = "windows")]
+fn ensure_apartment() {
+    thread_local! {
+        static READY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    READY.with(|ready| {
+        if !ready.get() {
+            // SAFETY: `RoInitialize` is a plain entry point taking no pointers.
+            let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+            ready.set(true);
+        }
+    });
+}
+
+/// Convert an RGBA frame to a BGRA8 `SoftwareBitmap` for OCR.
+///
+/// Alpha is forced opaque because a screen capture can carry `alpha == 0`, which
+/// OCR may read as a fully transparent image. A frame longer than
+/// `OcrEngine::MaxImageDimension` is scaled down; the returned factor maps OCR
+/// pixel coordinates back to the original frame.
+#[cfg(target_os = "windows")]
+fn to_software_bitmap(frame: &Frame) -> Option<(SoftwareBitmap, f32)> {
+    if frame.width == 0 || frame.height == 0 {
+        return None;
+    }
+    let needed = frame.width as usize * frame.height as usize * 4;
+    if frame.rgba.len() < needed {
+        return None;
+    }
+
+    let max = OcrEngine::MaxImageDimension().unwrap_or(u32::MAX).max(1);
+    let longest = frame.width.max(frame.height);
+    let (src, scale) = if longest > max {
+        use xcap::image::{imageops, RgbaImage};
+        let factor = max as f32 / longest as f32;
+        let w = ((frame.width as f32 * factor).round() as u32).max(1);
+        let h = ((frame.height as f32 * factor).round() as u32).max(1);
+        let image = RgbaImage::from_raw(frame.width, frame.height, frame.rgba[..needed].to_vec())?;
+        let resized = imageops::resize(&image, w, h, imageops::FilterType::Triangle);
+        (Frame { width: w, height: h, rgba: resized.into_raw() }, factor)
+    } else {
+        (Frame { width: frame.width, height: frame.height, rgba: frame.rgba[..needed].to_vec() }, 1.0)
+    };
+
+    let mut bgra = Vec::with_capacity(src.rgba.len());
+    for px in src.rgba.chunks_exact(4) {
+        bgra.push(px[2]);
+        bgra.push(px[1]);
+        bgra.push(px[0]);
+        bgra.push(0xFF);
+    }
+
+    let writer = DataWriter::new().ok()?;
+    writer.WriteBytes(&bgra).ok()?;
+    let buffer = writer.DetachBuffer().ok()?;
+    let bitmap =
+        SoftwareBitmap::CreateCopyFromBuffer(&buffer, BitmapPixelFormat::Bgra8, src.width as i32, src.height as i32)
+            .ok()?;
+    Some((bitmap, scale))
+}
+
+/// Union of a line's word rects as `(x, y, width, height)` in frame-local
+/// pixels. OCR reports pixels in the bitmap it was given, so `scale` maps them
+/// back to the original frame.
+#[cfg(target_os = "windows")]
+fn line_bounds(line: &OcrLine, scale: f32) -> Option<(u32, u32, u32, u32)> {
+    let words = line.Words().ok()?;
+    let (mut min_x, mut min_y) = (f32::MAX, f32::MAX);
+    let (mut max_x, mut max_y) = (f32::MIN, f32::MIN);
+    for word in words {
+        let Ok(rect) = word.BoundingRect() else {
+            continue;
+        };
+        min_x = min_x.min(rect.X);
+        min_y = min_y.min(rect.Y);
+        max_x = max_x.max(rect.X + rect.Width);
+        max_y = max_y.max(rect.Y + rect.Height);
+    }
+    if min_x > max_x || min_y > max_y {
+        return None;
+    }
+    let inv = 1.0 / scale;
+    let x = (min_x * inv).max(0.0).round() as u32;
+    let y = (min_y * inv).max(0.0).round() as u32;
+    let w = ((max_x - min_x) * inv).max(0.0).round() as u32;
+    let h = ((max_y - min_y) * inv).max(0.0).round() as u32;
+    (w != 0 && h != 0).then_some((x, y, w, h))
+}
+
 #[cfg(target_os = "windows")]
 impl WindowsOcrRecognizer {
-    fn find_text_exact(&self, _frame: &Frame, _needles: &[String]) -> Vec<TextMatch> {
-        Vec::new()
+    fn scan(&self, frame: &Frame, needles: &[String], kind: MatchKind) -> Vec<TextMatch> {
+        ensure_apartment();
+        let Some(engine) = ocr_engine() else {
+            return Vec::new();
+        };
+        let Some((bitmap, scale)) = to_software_bitmap(frame) else {
+            return Vec::new();
+        };
+        let engine = engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Ok(results) = engine.RecognizeAsync(&bitmap).and_then(|op| op.get()) else {
+            return Vec::new();
+        };
+        let Ok(lines) = results.Lines() else {
+            return Vec::new();
+        };
+
+        let normalized_needles: Vec<String> = needles.iter().map(|n| normalize(n)).collect();
+        let mut matches = Vec::new();
+        for line in lines {
+            let text = line.Text().map(|t| t.to_string()).unwrap_or_default();
+            let hit = match kind {
+                MatchKind::Exact => matches_needle(&text, &normalized_needles),
+                MatchKind::Substring => matches_substring(&text, &normalized_needles),
+            };
+            let Some((x, y, width, height)) = line_bounds(&line, scale).filter(|_| hit) else {
+                continue;
+            };
+            matches.push(TextMatch { text, x, y, width, height });
+        }
+        matches
     }
 
-    fn find_text_containing(&self, _frame: &Frame, _needles: &[String]) -> Vec<TextMatch> {
-        Vec::new()
+    fn find_text_exact(&self, frame: &Frame, needles: &[String]) -> Vec<TextMatch> {
+        self.scan(frame, needles, MatchKind::Exact)
     }
 
-    fn warm_up(&self) {}
+    fn find_text_containing(&self, frame: &Frame, needles: &[String]) -> Vec<TextMatch> {
+        self.scan(frame, needles, MatchKind::Substring)
+    }
+
+    /// Force engine creation and one recognition so the first real poll isn't
+    /// the one that pays the model-load cost.
+    fn warm_up(&self) {
+        let blank = Frame { width: 64, height: 64, rgba: vec![255; 64 * 64 * 4] };
+        self.scan(&blank, &[], MatchKind::Exact);
+    }
 }
 
 // ===== Shared Matching Logic =====
