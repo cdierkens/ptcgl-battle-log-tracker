@@ -21,14 +21,17 @@ Download the latest release from [GitHub Releases](https://github.com/cdierkens/
 
 ### macOS
 
-- **PTCGL Tracker_0.1.0_aarch64.dmg** — disk image, drag to Applications
-- **PTCGL Tracker_0.1.0_aarch64.app.zip** — zipped app bundle
+- **PTCGL.Tracker_0.2.0_aarch64.dmg** — disk image, drag to Applications
+- **PTCGL.Tracker_0.2.0_aarch64.app.zip** — zipped app bundle
 
 On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog.
 
 ### Windows
 
-From the next tagged release onward, the release workflow attaches a WiX `.msi` and an NSIS `setup.exe`. SmartScreen flags the unsigned installer — choose **More info** → **Run anyway**.
+- **PTCGL.Tracker_0.2.0_x64_en-US.msi** — WiX installer
+- **PTCGL.Tracker_0.2.0_x64-setup.exe** — NSIS installer
+
+SmartScreen flags the unsigned installer — choose **More info** → **Run anyway**.
 
 These are unsigned, ad-hoc-signed MVP builds. Notarization, Windows signing and auto-updates come in a later release.
 
