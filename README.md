@@ -7,7 +7,7 @@ only reads the screen. It never clicks, types, or reads game memory
 
 Tauri 2 (Rust) + React, shadcn/ui on Tailwind v4. Battle logs are parsed with
 [`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser).
-macOS today; Windows is planned. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
+macOS and Windows. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
 ### Demo
 
@@ -15,24 +15,30 @@ macOS today; Windows is planned. Terms are defined in [GLOSSARY.md](GLOSSARY.md)
 
 39 seconds: results screen → Capture Drawer → "Synced to Pokodojo". [Download the MP4](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases/download/v0.1.0/PTCGL%20Tracker%20Demo%20(final2).mp4) if the GIF doesn't play.
 
-## Install (macOS)
+## Install
 
-Download the latest release from [GitHub Releases](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases):
+Download the latest release from [GitHub Releases](https://github.com/cdierkens/ptcgl-battle-log-tracker/releases).
+
+### macOS
 
 - **PTCGL Tracker_0.1.0_aarch64.dmg** — disk image, drag to Applications
 - **PTCGL Tracker_0.1.0_aarch64.app.zip** — zipped app bundle
 
 On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog.
 
-This is an unsigned, ad-hoc-signed MVP build. Notarization and auto-updates come in a later release.
+### Windows
+
+From the next tagged release onward, the release workflow attaches a WiX `.msi` and an NSIS `setup.exe`. SmartScreen flags the unsigned installer — choose **More info** → **Run anyway**.
+
+These are unsigned, ad-hoc-signed MVP builds. Notarization, Windows signing and auto-updates come in a later release.
 
 ## Run from source
 
 ## Requirements
 
 - Node 24+ and pnpm 11 (`packageManager` in `package.json`)
-- Rust 1.86 (pinned by `rust-toolchain.toml`; rustup installs it)
-- macOS with Xcode Command Line Tools
+- Rust stable, at least 1.90 (the floor the dependency set declares; `rust-toolchain.toml` tracks stable and rustup installs it)
+- macOS with Xcode Command Line Tools, or Windows with the Visual Studio C++ build tools
 
 ## Run
 
@@ -40,7 +46,7 @@ This is an unsigned, ad-hoc-signed MVP build. Notarization and auto-updates come
 pnpm install
 pnpm tauri dev                # debug build with the Vite dev server
 pnpm tauri dev --release      # what to play on
-pnpm tauri build              # a .app bundle in src-tauri/target/release/bundle
+pnpm tauri build              # platform bundles in src-tauri/target/release/bundle
 ```
 
 `pnpm tauri dev` starts Vite (port 5173) and builds the Rust app. Running `cargo`
@@ -50,16 +56,6 @@ directly in `src-tauri` needs a built UI in `dist/` first (`pnpm build`), becaus
 To try log sync without a real site, run `pnpm sync-stub` and paste the config it
 prints into Settings → Sync. Only debug builds accept its `http://localhost` URL.
 `STUB_STATUS=401 pnpm sync-stub` forces a status (401 shows needs attention).
-
-### Windows support — coming soon
-
-Windows is planned but not yet supported. The non-macOS capture/OCR ports are
-stubs, and no Windows binaries are published. Follow-up spec #3 (Windows support)
-covers the port; it ships through the release pipeline, not as a cross-compiled
-`.exe` from macOS.
-
-If you'd like to help test Windows builds, open an issue and we'll coordinate
-once the release spec lands.
 
 ## Where things live
 
@@ -90,7 +86,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI runs these on macOS, plus a compile-and-test job on Windows.
+CI runs these on macOS, plus a compile-and-test job on Windows. Tagging a `v*` release builds both platforms — see `.github/workflows/release.yml`.
 
 ## Performance notes
 

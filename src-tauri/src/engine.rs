@@ -220,7 +220,7 @@ impl EngineCtx {
         let frame = if ready { frames.capture(&window) } else { None };
         let tab_visible = frame.as_ref().map(|frame| {
             self.polls = self.polls.wrapping_add(1);
-            probe.tab_visible(frame, self.polls % SWEEP_EVERY == 0)
+            probe.tab_visible(frame, self.polls.is_multiple_of(SWEEP_EVERY))
         });
         self.record(PollTrace { tab_visible, active_pid, game_pid: window.pid, focused });
         if let Some((frame, tab_visible)) = frame.zip(tab_visible) {

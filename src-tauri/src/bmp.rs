@@ -53,7 +53,7 @@ pub fn encode_bmp(frame: &Frame) -> Option<Vec<u8>> {
     // BMP stores the first row last, so walk y in reverse. Pixels are BGRA.
     for y in (0..frame.height as usize).rev() {
         let row = y * row_bytes;
-        for px in rgba[row..row + row_bytes].chunks_exact(4) {
+        for px in rgba[row..row + row_bytes].as_chunks::<4>().0 {
             out.push(px[2]); // B
             out.push(px[1]); // G
             out.push(px[0]); // R

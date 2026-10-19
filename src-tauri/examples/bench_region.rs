@@ -13,6 +13,7 @@ use ptcgl_battle_log_capture_lib::platform::ocr::VisionTextRecognizer;
 use ptcgl_battle_log_capture_lib::platform::window::XcapWindowProvider;
 #[cfg(target_os = "macos")]
 use ptcgl_battle_log_capture_lib::ports::{Frame, FrameCapturer, TextRecognizer, WindowProvider};
+#[cfg(target_os = "macos")]
 use std::time::Instant;
 
 #[cfg(not(target_os = "macos"))]

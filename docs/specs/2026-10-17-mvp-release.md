@@ -18,7 +18,6 @@ D17 requires a release spec before any public binary. This spec satisfies that g
 - Build macOS release bundle via `pnpm tauri build`
 - Upload `.app` (and `.dmg`) as GitHub Release assets
 - README download link + Gatekeeper instructions
-- `ship-windows/` build output remains uncommitted (build output, not a release)
 
 ## Scope (out)
 

@@ -7,14 +7,14 @@ MIT. Sibling of `@dierkens.dev/ptcgl-battle-log-parser`.
 ## Status: standalone
 
 Extracted from `pokedojo.pro/apps/battle-log-capture` per
-`docs/specs/2026-10-11-capture-app-extraction.md`. Builds on its own; macOS
-only for now (Windows compiles in CI with stubbed capture/OCR).
+`docs/specs/2026-10-11-capture-app-extraction.md`. Builds on its own; macOS and
+Windows, with per-platform capture, OCR, focus and clipboard ports.
 
 ## Commands
 
 - `pnpm install`, `pnpm tauri dev`
 - `pnpm run verify`: typecheck, lint, test, build. Run it before committing.
-- `pnpm build:windows`: cross-compile the Windows `.exe` on macOS via cargo-xwin (setup in README).
+- `pnpm tauri build`: platform bundles (`.dmg`/`.app` on macOS, `.msi`/NSIS `.exe` on Windows). Tagging `v*` builds both on CI.
 - In `src-tauri/`: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`. Cargo needs `dist/` from `pnpm build`.
 - Dependencies are pinned exactly. pnpm 11 rejects releases younger than a day.
 - Run the `code-review` skill against the base branch after each layer (each issue/PR in a stack), and resolve its findings before opening or merging that PR.

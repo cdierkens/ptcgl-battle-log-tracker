@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:windows": "vite build && cd src-tauri && PATH=\"$(brew --prefix llvm)/bin:$PATH\" cargo xwin build --release --features custom-protocol --target x86_64-pc-windows-msvc",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -21,7 +20,7 @@
   "dependencies": {
     "@dierkens.dev/ptcgl-battle-log-parser": "1.1.0",
     "@fontsource-variable/geist": "5.3.0",
-    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/api": "2.12.4",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
     "lucide-react": "1.55.0",
@@ -32,7 +31,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@tailwindcss/vite": "4.3.3",
-    "@tauri-apps/cli": "2.11.5",
+    "@tauri-apps/cli": "2.12.3",
     "@types/node": "24.19.2",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",

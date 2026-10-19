@@ -51,7 +51,7 @@ jobs:
         working-directory: src-tauri
         run: cargo test
 
-  # Keeps the non-macOS stubs and the pure core compiling before the Windows spec.
+  # Windows runs the ports for real: fmt, clippy, tests, and a release bundle.
   compile:
     runs-on: windows-latest
     steps:
@@ -73,15 +73,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
-      - name: cargo check
+      - name: cargo fmt
         working-directory: src-tauri
-        run: cargo check --all-targets
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
 
-      # Testable Windows binary while the port is in progress.
+      # The Windows binary the release workflow packages.
       # custom-protocol embeds dist/; without it the app looks for localhost:5173.
       - name: cargo build --release
         working-directory: src-tauri
