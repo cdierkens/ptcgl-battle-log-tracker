@@ -53,7 +53,7 @@ pub fn list_logs(dir: &Path) -> Result<Vec<LogSummary>, String> {
         let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
         logs.push(LogSummary { file_name, size_bytes, created_ms });
     }
-    logs.sort_by(|a, b| b.created_ms.cmp(&a.created_ms)); // newest first
+    logs.sort_by_key(|a| std::cmp::Reverse(a.created_ms)); // newest first
     Ok(logs)
 }
 
