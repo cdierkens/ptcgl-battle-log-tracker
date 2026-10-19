@@ -37,7 +37,7 @@ These are unsigned, ad-hoc-signed MVP builds. Notarization, Windows signing and 
 ## Requirements
 
 - Node 24+ and pnpm 11 (`packageManager` in `package.json`)
-- Rust stable (pinned by `rust-toolchain.toml`; rustup installs it)
+- Rust stable, at least 1.90 (the floor the dependency set declares; `rust-toolchain.toml` tracks stable and rustup installs it)
 - macOS with Xcode Command Line Tools, or Windows with the Visual Studio C++ build tools
 
 ## Run

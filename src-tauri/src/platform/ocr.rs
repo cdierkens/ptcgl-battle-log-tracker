@@ -302,7 +302,7 @@ fn to_software_bitmap(frame: &Frame) -> Option<(SoftwareBitmap, f32)> {
     };
 
     let mut bgra = Vec::with_capacity(src.rgba.len());
-    for px in src.rgba.chunks_exact(4) {
+    for px in src.rgba.as_chunks::<4>().0 {
         bgra.push(px[2]);
         bgra.push(px[1]);
         bgra.push(px[0]);

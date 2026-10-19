@@ -1,4 +1,4 @@
-//! The general pasteboard, via AppKit.
+//! The system clipboard: `NSPasteboard` on macOS, the Win32 clipboard on Windows.
 
 use crate::clipboard::{ClipboardAccess, ClipboardError, ClipboardProbe};
 
@@ -53,11 +53,14 @@ impl ClipboardProbe for SystemClipboard {
 
 #[cfg(target_os = "windows")]
 mod win {
+    use std::sync::OnceLock;
     use std::time::Duration;
 
+    use windows::core::HSTRING;
     use windows::Win32::Foundation::{HGLOBAL, HWND};
     use windows::Win32::System::DataExchange::{
         CloseClipboard, GetClipboardData, GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
+        RegisterClipboardFormatW,
     };
     use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
 
@@ -95,7 +98,7 @@ mod win {
             if !open_with_retry() {
                 return Err(ClipboardError::Unavailable("the clipboard is held open by another application".into()));
             }
-            let text = read_open_clipboard();
+            let text = if is_concealed() { Ok(None) } else { read_open_clipboard() };
             // SAFETY: the clipboard was opened just above; unbalanced opens leak.
             let _ = unsafe { CloseClipboard() };
             text
@@ -106,6 +109,71 @@ mod win {
         // `Err` is the "format not present" answer, not a failure.
         // SAFETY: takes no pointers.
         unsafe { IsClipboardFormatAvailable(CF_UNICODETEXT).is_ok() }
+    }
+
+    /// Windows' counterpart to macOS's `org.nspasteboard` markers: the formats
+    /// password managers (and Windows itself) set to keep content out of history,
+    /// cloud sync and monitor processing.
+    struct ConcealFormats {
+        /// Presence alone means "do not process".
+        exclude: u32,
+        /// These two carry a `DWORD`; 0 means "keep it out of" history/cloud.
+        can_include: u32,
+        can_upload: u32,
+    }
+
+    fn conceal_formats() -> &'static ConcealFormats {
+        static FORMATS: OnceLock<ConcealFormats> = OnceLock::new();
+        FORMATS.get_or_init(|| ConcealFormats {
+            exclude: register_format("ExcludeClipboardContentFromMonitorProcessing"),
+            can_include: register_format("CanIncludeInClipboardHistory"),
+            can_upload: register_format("CanUploadToCloudClipboard"),
+        })
+    }
+
+    /// `RegisterClipboardFormatW` also registers the name, so the id is stable
+    /// for the session. 0 means the name could not be registered.
+    fn register_format(name: &str) -> u32 {
+        // SAFETY: the temporary `HSTRING` is NUL-terminated and outlives the call.
+        unsafe { RegisterClipboardFormatW(&HSTRING::from(name)) }
+    }
+
+    /// True when the clipboard is marked concealed or transient, which the
+    /// shared `ClipboardProbe` contract asks us to answer with `Ok(None)`. The
+    /// caller must have the clipboard open.
+    fn is_concealed() -> bool {
+        let formats = conceal_formats();
+        // SAFETY: takes no pointers.
+        if formats.exclude != 0 && unsafe { IsClipboardFormatAvailable(formats.exclude) }.is_ok() {
+            return true;
+        }
+        flag_is_zero(formats.can_include) || flag_is_zero(formats.can_upload)
+    }
+
+    /// A `Can…` marker that is present and holds 0 forbids its destination.
+    fn flag_is_zero(format: u32) -> bool {
+        format != 0 && read_dword(format) == Some(0)
+    }
+
+    /// Read a `DWORD`-valued format while the clipboard is open. An absent,
+    /// non-DWORD or unreadable format all answer `None`.
+    fn read_dword(format: u32) -> Option<u32> {
+        // SAFETY: the clipboard is open for the duration of this call.
+        let handle = unsafe { GetClipboardData(format) }.ok()?;
+        let global = HGLOBAL(handle.0);
+        // SAFETY: `global` is the clipboard's own handle while it is open.
+        let ptr = unsafe { GlobalLock(global) }.cast::<u32>();
+        if ptr.is_null() {
+            return None;
+        }
+        // SAFETY: `global` is still locked, so its size is readable and bounds
+        // the read below.
+        let big_enough = unsafe { GlobalSize(global) } >= std::mem::size_of::<u32>();
+        // SAFETY: the format holds a `DWORD`, and the size check guards the read.
+        let value = big_enough.then(|| unsafe { *ptr });
+        // SAFETY: balances the `GlobalLock` above.
+        let _ = unsafe { GlobalUnlock(global) };
+        value
     }
 
     /// `OpenClipboard` fails while another process holds the clipboard; retry

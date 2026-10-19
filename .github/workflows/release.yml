@@ -7,9 +7,10 @@ name: Release
 #      that the tag matches tauri.conf.json.
 #   2. Commit and push, then tag: git tag v0.2.0 && git push origin v0.2.0
 #
-# Builds are unsigned, matching docs/specs/2026-10-17-mvp-release.md: macOS is
-# ad-hoc signed and Gatekeeper flags it; the Windows installers are unsigned and
-# SmartScreen flags them. Signing and the Tauri updater are later work.
+# Builds are unsigned: macOS is ad-hoc signed and Gatekeeper flags it; the
+# Windows installers are unsigned and SmartScreen flags them. Signing and the
+# Tauri updater are later work. docs/specs/2026-10-17-mvp-release.md records the
+# macOS v0.1.0 shape; the Windows binaries ship with the Windows support spec.
 #
 # The release is created as a draft. Review it under Releases, then publish.
 

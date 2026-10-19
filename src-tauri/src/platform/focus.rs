@@ -1,4 +1,4 @@
-//! The active application's process id, via AppKit.
+//! The active application's process id: `NSWorkspace` on macOS, `GetForegroundWindow` on Windows.
 
 use crate::focus::FocusProbe;
 
@@ -27,6 +27,8 @@ mod win {
     use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 
     pub(super) fn foreground_pid() -> Option<u32> {
+        // SAFETY: neither call takes ownership, and `GetWindowThreadProcessId`
+        // writes only to the local handed to it.
         unsafe {
             let hwnd = GetForegroundWindow();
             if hwnd.is_invalid() {
