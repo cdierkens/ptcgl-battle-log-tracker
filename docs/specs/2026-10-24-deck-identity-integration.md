@@ -71,9 +71,7 @@ CREATE TABLE deck_versions (
   raw_text TEXT NOT NULL,            -- exactly what the player pasted
   decklist_text TEXT NOT NULL,       -- renderDecklist(deck, "ptcgl")
   format_label TEXT,                 -- confirmed label, e.g. 'TEF-30C'
-  archetype_id TEXT,
-  archetype_label TEXT,
-  archetype_cards TEXT,              -- JSON array of sprite slugs
+  archetype_json TEXT,               -- JSON { id, label, cards } or null
   deck_id_hash TEXT,                 -- package deckId value
   list_id_hash TEXT,                 -- package listId value
   hash_version INTEGER,

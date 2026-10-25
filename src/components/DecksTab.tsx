@@ -323,7 +323,11 @@ function DeckForm({
                 </option>
               ))}
             </select>
-            <FieldDescription>{suggestions.length > 0 ? suggestions[0]?.reasons.join(" ") : "No suggestion yet."}</FieldDescription>
+            <FieldDescription>
+              {suggestions.length > 0 && suggestions[0] !== undefined
+                ? `${evidenceText(suggestions[0])} ${suggestions[0].reasons.join(" ")}`
+                : "No suggestion yet."}
+            </FieldDescription>
           </Field>
 
           <details className="text-xs text-muted-foreground">
@@ -339,6 +343,14 @@ function DeckForm({
       </div>
     </div>
   );
+}
+
+function evidenceText(suggestion: DeckPreview["archetypeSuggestions"][number]): string {
+  if (suggestion.evidence.kind === "alias") {
+    const matched = suggestion.evidence.matched.map((match) => `${match.count}× ${match.name}`).join(", ");
+    return `Matched ${matched} in ${suggestion.evidence.windows.join(", ")}.`;
+  }
+  return `Line ${suggestion.evidence.line}: ${suggestion.evidence.copies} cards across ${suggestion.evidence.stages} stage(s), ${suggestion.evidence.traits.join(", ")}.`;
 }
 
 function selectedArchetype(preview: DeckPreview, key: string, editing: Deck | null): SaveDeckInput["archetype"] {

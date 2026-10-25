@@ -86,6 +86,8 @@ pub enum DeckStoreError {
     Invalid(String),
     #[error("deck not found")]
     NotFound,
+    #[error("deck library is unavailable")]
+    Unavailable,
 }
 
 /// Shared by commands and the delivery worker; `Connection` isn't `Sync`.
@@ -99,6 +101,7 @@ pub fn lock(store: &SharedDeckStore) -> MutexGuard<'_, DeckStore> {
 /// SQLite-backed deck library, in the app-data folder (ADR 0002).
 pub struct DeckStore {
     conn: Connection,
+    persistent: bool,
 }
 
 impl DeckStore {
@@ -112,15 +115,16 @@ impl DeckStore {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        Self::init(Connection::open(path)?)
+        Self::init(Connection::open(path)?, true)
     }
 
-    /// Fallback when the file can't be opened. Log capture never depends on this.
+    /// Fallback when the file can't be opened. Commands report the library as
+    /// unavailable; log capture never depends on it.
     pub fn open_in_memory() -> Result<Self, DeckStoreError> {
-        Self::init(Connection::open_in_memory()?)
+        Self::init(Connection::open_in_memory()?, false)
     }
 
-    fn init(conn: Connection) -> Result<Self, DeckStoreError> {
+    fn init(conn: Connection, persistent: bool) -> Result<Self, DeckStoreError> {
         conn.execute_batch(&format!(
             "CREATE TABLE IF NOT EXISTS decks (
                 id TEXT PRIMARY KEY,
@@ -147,11 +151,20 @@ impl DeckStore {
             );
             PRAGMA user_version = {SCHEMA_VERSION};"
         ))?;
-        Ok(Self { conn })
+        Ok(Self { conn, persistent })
+    }
+
+    fn require_persistent(&self) -> Result<(), DeckStoreError> {
+        if self.persistent {
+            Ok(())
+        } else {
+            Err(DeckStoreError::Unavailable)
+        }
     }
 
     /// List active (non-archived) decks, most recently updated first.
     pub fn list(&self) -> Result<Vec<Deck>, DeckStoreError> {
+        self.require_persistent()?;
         let mut stmt = self.conn.prepare(
             "SELECT d.id, d.name, d.created_at, d.updated_at, d.archived_at,
                     v.id, v.source, v.raw_text, v.decklist_text, v.format_label,
@@ -167,6 +180,7 @@ impl DeckStore {
     }
 
     pub fn get(&self, id: &str) -> Result<Option<Deck>, DeckStoreError> {
+        self.require_persistent()?;
         let mut stmt = self.conn.prepare(
             "SELECT d.id, d.name, d.created_at, d.updated_at, d.archived_at,
                     v.id, v.source, v.raw_text, v.decklist_text, v.format_label,
@@ -181,6 +195,7 @@ impl DeckStore {
 
     /// Create a deck or add an immutable version to an existing deck.
     pub fn save(&mut self, input: SaveDeckInput) -> Result<Deck, DeckStoreError> {
+        self.require_persistent()?;
         let name = input.name.trim();
         if name.is_empty() {
             return Err(DeckStoreError::Invalid("deck name is required".into()));
@@ -249,6 +264,7 @@ impl DeckStore {
 
     /// Hide a deck from the picker without breaking match snapshots.
     pub fn archive(&self, id: &str) -> Result<(), DeckStoreError> {
+        self.require_persistent()?;
         let changed = self.conn.execute(
             "UPDATE decks SET archived_at = ?2, updated_at = ?2 WHERE id = ?1 AND archived_at IS NULL",
             params![id, now_ms()],
@@ -380,6 +396,13 @@ mod tests {
         let mut temp = TempStore::new("source");
         let error = temp.store.save(SaveDeckInput { source: "ocr".into(), ..input(None, "x") }).unwrap_err();
         assert!(matches!(error, DeckStoreError::Invalid(_)));
+    }
+
+    #[test]
+    fn in_memory_fallback_reports_the_library_unavailable() {
+        let mut store = DeckStore::open_in_memory().unwrap();
+        assert!(matches!(store.list(), Err(DeckStoreError::Unavailable)));
+        assert!(matches!(store.save(input(None, "x")), Err(DeckStoreError::Unavailable)));
     }
 
     #[test]
