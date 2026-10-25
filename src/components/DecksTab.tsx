@@ -237,6 +237,8 @@ function DeckForm({
   const storedOption = storedArchetype !== null && !suggestions.some((suggestion) => suggestion.id === storedArchetype.id)
     ? storedArchetype
     : null;
+  const shownSuggestion = suggestions.find((suggestion) => suggestion.id === archetypeKey)
+    ?? (archetypeKey === "" ? suggestions[0] : undefined);
 
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
@@ -325,8 +327,8 @@ function DeckForm({
               ))}
             </select>
             <FieldDescription>
-              {suggestions.length > 0 && suggestions[0] !== undefined
-                ? `${evidenceText(suggestions[0])} ${suggestions[0].reasons.join(" ")}`
+              {shownSuggestion !== undefined
+                ? `${evidenceText(shownSuggestion)} ${shownSuggestion.reasons.join(" ")}`
                 : "No suggestion yet."}
             </FieldDescription>
           </Field>
