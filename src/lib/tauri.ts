@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface ArchetypeRef {
+  cards: string[];
+  id: null | string;
+  label: string;
+}
+
 /** A destination paused because it rejected its token. */
 export interface Attention {
   destination: string;
@@ -13,6 +19,30 @@ export interface CaptureStatusEvent {
   ts: number;
 }
 
+export interface Deck {
+  archivedAt: null | number;
+  createdAt: number;
+  currentVersion: DeckVersion;
+  id: string;
+  name: string;
+  updatedAt: number;
+}
+
+export interface DeckVersion {
+  archetype: ArchetypeRef | null;
+  catalogContextId: null | string;
+  catalogVersion: null | string;
+  createdAt: number;
+  deckIdHash: null | string;
+  decklistText: string;
+  formatLabel: null | string;
+  hashVersion: null | number;
+  id: string;
+  listIdHash: null | string;
+  rawText: string;
+  source: string;
+}
+
 /** One delivery of a saved log to a destination. Held deliveries read as pending. */
 export interface DeliveryStatus {
   destination: string;
@@ -21,7 +51,6 @@ export interface DeliveryStatus {
   log: string;
   state: SyncState;
 }
-
 export interface Destination {
   enabled: boolean;
   headers: Record<string, string>;
@@ -53,6 +82,21 @@ export interface OverlayStateEvent {
   state: string;
 }
 
+export interface SaveDeckInput {
+  archetype: ArchetypeRef | null;
+  catalogContextId: null | string;
+  catalogVersion: null | string;
+  deckIdHash: null | string;
+  decklistText: string;
+  formatLabel: null | string;
+  hashVersion: null | number;
+  id?: string;
+  listIdHash: null | string;
+  name: string;
+  rawText: string;
+  source: string;
+}
+
 export interface Settings {
   clipboard_autosave: boolean;
   /** Read-only here: `save_settings` keeps the saved list; use the destination commands. */
@@ -82,6 +126,9 @@ export const getSettings = () => invoke<Settings>("get_settings");
 export const saveSettings = (s: Settings) => invoke<Settings>("save_settings", { s });
 export const listLogs = () => invoke<LogSummary[]>("list_logs");
 export const readLog = (fileName: string) => invoke<string>("read_log", { fileName });
+export const listDecks = () => invoke<Deck[]>("list_decks");
+export const saveDeck = (input: SaveDeckInput) => invoke<Deck>("save_deck", { input });
+export const archiveDeck = (id: string) => invoke<void>("archive_deck", { id });
 
 export const getCaptureState = () => invoke<string>("get_capture_state");
 export const submitBattleLog = (text: string) => invoke<SubmitOutcome>("submit_battle_log", { text });

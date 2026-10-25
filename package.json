@@ -18,6 +18,7 @@
     "verify": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build"
   },
   "dependencies": {
+    "@dierkens.dev/ptcg-decklist-tools": "0.2.0",
     "@dierkens.dev/ptcgl-battle-log-parser": "1.1.0",
     "@fontsource-variable/geist": "5.3.0",
     "@tauri-apps/api": "2.12.4",

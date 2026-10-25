@@ -71,9 +71,7 @@ CREATE TABLE deck_versions (
   raw_text TEXT NOT NULL,            -- exactly what the player pasted
   decklist_text TEXT NOT NULL,       -- renderDecklist(deck, "ptcgl")
   format_label TEXT,                 -- confirmed label, e.g. 'TEF-30C'
-  archetype_id TEXT,
-  archetype_label TEXT,
-  archetype_cards TEXT,              -- JSON array of sprite slugs
+  archetype_json TEXT,               -- JSON { id, label, cards } or null
   deck_id_hash TEXT,                 -- package deckId value
   list_id_hash TEXT,                 -- package listId value
   hash_version INTEGER,
@@ -169,7 +167,7 @@ shown as an opaque confirmed label, not silently accepted as a window.
 Add `deck_store` in `src-tauri`:
 
 - open/migrate `<app data>/decks.sqlite`;
-- `list_decks`, `get_deck`, `save_deck_version`, `archive_deck`;
+- `list_decks`, `save_deck`, `archive_deck`; `get` is internal to save;
 - `get_active_deck`, `set_active_deck`;
 - `assign_match_deck`, `clear_match_deck`, `get_match_deck`;
 - expose `DeckLibrary` through Tauri state and commands.

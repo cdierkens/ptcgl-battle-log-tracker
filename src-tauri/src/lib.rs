@@ -3,6 +3,7 @@ pub mod buttons;
 pub mod clipboard;
 pub mod commands;
 pub mod coords;
+pub mod deck_store;
 pub mod dedupe;
 pub mod delivery_queue;
 pub mod destinations;
@@ -73,6 +74,9 @@ pub fn run() {
             commands::retry_destination,
             commands::get_sync_status,
             commands::sync_log,
+            commands::list_decks,
+            commands::save_deck,
+            commands::archive_deck,
         ])
         // The drawer is the everyday UI; closing the main window only hides it (⌘Q quits).
         .on_window_event(|window, event| {
@@ -97,6 +101,12 @@ pub fn run() {
             let shared: SharedSettings = Arc::new(RwLock::new(paths.load()));
             let secrets: Arc<dyn SecretStore> = Arc::new(FileSecretStore::new(&config_dir, &app.config().identifier)?);
             let queue: SharedQueue = Arc::new(Mutex::new(open_queue(app.handle())?));
+            let deck_path = deck_store::DeckStore::resolve_path(app.handle())?;
+            let deck_store = deck_store::DeckStore::open(&deck_path).or_else(|error| {
+                tracing::warn!("deck library unavailable: {error}");
+                deck_store::DeckStore::open_in_memory()
+            })?;
+            let deck_store: deck_store::SharedDeckStore = Arc::new(Mutex::new(deck_store));
             let sink: Arc<dyn LogSink> = Arc::new(SyncingLogSink::new(
                 StoreLogSink::new(FsLogStore::new(shared.clone())),
                 shared.clone(),
@@ -111,6 +121,7 @@ pub fn run() {
             app.manage(shared.clone());
             app.manage(secrets.clone());
             app.manage(queue.clone());
+            app.manage(deck_store);
             app.manage(sink.clone());
             app.manage(events);
 

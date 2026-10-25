@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+
 import { StatusAlert } from "@/components/StatusAlert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,8 @@ import { MatchCard } from "./MatchCard";
 import { MatchList } from "./MatchList";
 import { PasteForm } from "./PasteForm";
 import { SettingsTab } from "./SettingsTab";
+
+const DecksTab = lazy(() => import("./DecksTab").then((module) => ({ default: module.DecksTab })));
 
 interface HubProps {
   focusPaste?: boolean;
@@ -67,6 +71,7 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
       <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="matches">
         <TabsList aria-label="Sections" className="mx-4 mt-2" variant="line">
           <TabsTrigger value="matches">Matches</TabsTrigger>
+          {onClose === undefined ? <TabsTrigger value="decks">Decks</TabsTrigger> : null}
           <TabsTrigger value="settings">
             Settings
             {syncNeedsAttention(sync.status, destinations) ? <AttentionDot /> : null}
@@ -84,6 +89,13 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
           )}
           <MatchList destinations={destinations} matches={matches} playerName={playerName} sync={sync.status} />
         </TabsContent>
+        {onClose === undefined ? (
+          <TabsContent className="min-h-0 overflow-y-auto" value="decks">
+            <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading decks…</p>}>
+              <DecksTab />
+            </Suspense>
+          </TabsContent>
+        ) : null}
         <TabsContent className="min-h-0 overflow-y-auto" value="settings">
           <SettingsTab settings={settings} sync={sync.status} />
         </TabsContent>
