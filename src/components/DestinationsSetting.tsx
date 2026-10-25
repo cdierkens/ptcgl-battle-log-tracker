@@ -32,6 +32,7 @@ import {
   previewDestination,
   removeDestination,
   retryDestination,
+  setDestinationDeckIdentity,
   setDestinationEnabled,
   setDestinationToken,
 } from "../lib/tauri";
@@ -111,6 +112,23 @@ export function DestinationsSetting({ settings, sync }: { settings: SettingsView
           <Button disabled={busy} onClick={() => setPendingRemove(destination)} size="sm" variant="ghost">
             Remove
           </Button>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={destination.send_deck_identity}
+              disabled={busy}
+              id={`destination-deck-${destination.id}`}
+              onCheckedChange={(enabled) => run(() => setDestinationDeckIdentity(destination.id, enabled))}
+            />
+            <label className="text-xs font-medium" htmlFor={`destination-deck-${destination.id}`}>
+              Send deck identity
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            When on, includes the saved decklist, format, and archetypes with each match. Your decklist is player data;
+            this is off by default.
+          </p>
         </div>
         {reason === null ? null : (
           <NeedsAttention busy={busy} destination={destination} onError={fail} reason={reason} run={run} />

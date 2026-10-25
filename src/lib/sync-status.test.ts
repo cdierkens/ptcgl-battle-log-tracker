@@ -5,7 +5,15 @@ import type { Destination, SyncStatus } from "./tauri";
 import { attentionReason, matchSyncs, syncActions, syncNeedsAttention } from "./sync-status";
 
 function destination(id: string, name: string, enabled = true): Destination {
-  return { enabled, headers: {}, id, name, token_url: null, url: `https://${id}.example/api` };
+  return {
+    enabled,
+    headers: {},
+    id,
+    name,
+    send_deck_identity: false,
+    token_url: null,
+    url: `https://${id}.example/api`,
+  };
 }
 
 const dojo = destination("dojo", "PokeDojo");

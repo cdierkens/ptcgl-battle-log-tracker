@@ -110,6 +110,11 @@ pub fn set_destination_enabled(id: String, enabled: bool, app: AppHandle) -> Res
 }
 
 #[tauri::command]
+pub fn set_destination_deck_identity(id: String, enabled: bool, app: AppHandle) -> Result<(), String> {
+    change_destinations(&app, |list, _, _| destinations::set_send_deck_identity(list, &id, enabled))
+}
+
+#[tauri::command]
 pub fn remove_destination(
     id: String,
     app: AppHandle,

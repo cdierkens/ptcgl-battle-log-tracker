@@ -74,7 +74,8 @@ prints into Settings → Sync. Only debug builds accept its `http://localhost` U
   Delete it to rerun first-run setup.
 - **Deck library:** `decks.sqlite` in the OS app-data folder. It holds
   player-supplied decklists, immutable versions, and per-match snapshots; it is
-  never written into the log folder.
+  never written into the log folder. Sending a decklist to a destination is a
+  separate per-destination opt-in in Settings.
 
 See [ADR 0002](docs/adr/0002-log-folder-in-home-settings-in-app-config.md).
 

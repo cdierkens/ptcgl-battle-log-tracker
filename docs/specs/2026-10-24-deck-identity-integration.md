@@ -1,6 +1,6 @@
 # Spec: Deck identity in PTCGL Tracker
 
-Status: **In progress** (grilled 2026-10-24; Slices 1–2 implemented, 3–5 pending)
+Status: **In progress** (grilled 2026-10-24; Slices 1–3 implemented, 4–5 pending)
 Repo: `ptcgl-battle-log-tracker`
 Depends on: `@dierkens.dev/ptcg-decklist-tools@0.2.0`
 Related: [log sync](2026-10-12-log-sync.md), [capture app extraction](2026-10-11-capture-app-extraction.md), [MVP release](2026-10-17-mvp-release.md)
@@ -388,7 +388,7 @@ archetype suggestion, and unresolved warnings; data survives restart.
 Acceptance: saving a match with an active deck produces a durable snapshot;
 editing the deck later does not change that match.
 
-### Slice 3 — Portable payload and destination switch
+### Slice 3 — Portable payload and destination switch (**done**)
 
 - Add optional `deck` to the envelope.
 - Per-destination **Send deck identity** switch, default off.
