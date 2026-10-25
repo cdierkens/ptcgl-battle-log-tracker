@@ -79,6 +79,32 @@ One saved log as the player sees it in the list: result, prizes, and opponent, w
 log can be analysed.
 _Avoid_: game (ambiguous with PTCG Live), row
 
+### Decks
+
+**Deck library**:
+The player-supplied decklists the app keeps in its own app data. The app never reads a
+decklist from PTCG Live.
+_Avoid_: collection, inventory, deck box
+
+**Deck version**:
+One immutable row in the deck library. Editing a deck adds a version instead of changing
+an old one.
+_Avoid_: revision, edit, history entry
+
+**Active deck**:
+The one deck that new saved logs snapshot. The player can switch it or choose **No deck**.
+_Avoid_: current deck, selected deck, default deck
+
+**Deck snapshot**:
+The immutable copy of a deck version attached to one saved log. Later edits do not change
+it.
+_Avoid_: assignment, deck link, match deck (internal only)
+
+**Portable decklist**:
+The PTCGL-rendered text of a deck snapshot or deck version. Destinations receive it; the
+original pasted text stays local.
+_Avoid_: export, list text, deck string
+
 ### Platform
 
 **Platform port**:

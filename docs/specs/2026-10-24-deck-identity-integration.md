@@ -1,6 +1,6 @@
 # Spec: Deck identity in PTCGL Tracker
 
-Status: **Draft** (grilled 2026-10-24; implementation not started)
+Status: **In progress** (grilled 2026-10-24; Slices 1–2 implemented, 3–5 pending)
 Repo: `ptcgl-battle-log-tracker`
 Depends on: `@dierkens.dev/ptcg-decklist-tools@0.2.0`
 Related: [log sync](2026-10-12-log-sync.md), [capture app extraction](2026-10-11-capture-app-extraction.md), [MVP release](2026-10-17-mvp-release.md)
@@ -50,7 +50,9 @@ The local flow is useful on its own. Sync is a second, explicit step.
 
 ## Data model
 
-All deck data lives in `<app data>/decks.sqlite`. Schema version starts at 1.
+All deck data lives in `<app data>/decks.sqlite`. Schema version 2: Slice 2
+adds `match_decks` and `meta` to the Slice 1 tables, and a version 1 database
+migrates additively on open.
 
 ```sql
 -- A stable local deck. The package deckId is not the primary key.
@@ -85,6 +87,7 @@ CREATE TABLE match_decks (
   log_file_name TEXT PRIMARY KEY,
   deck_id TEXT NOT NULL REFERENCES decks(id),
   deck_version_id TEXT NOT NULL REFERENCES deck_versions(id),
+  deck_name TEXT NOT NULL,            -- copied at assignment, not joined live
   decklist_text TEXT NOT NULL,
   format_label TEXT,
   archetype_id TEXT,
@@ -365,7 +368,7 @@ full library.
 
 ## Rollout slices
 
-### Slice 1 — Deck library and local identity
+### Slice 1 — Deck library and local identity (**done**)
 
 - Add `@dierkens.dev/ptcg-decklist-tools` at an exact version.
 - Add `decks.sqlite`, `deck_store`, and Tauri commands.
@@ -375,7 +378,7 @@ full library.
 Acceptance: a player can add a deck and see its rendered list, format candidates,
 archetype suggestion, and unresolved warnings; data survives restart.
 
-### Slice 2 — Active deck and match association
+### Slice 2 — Active deck and match association (**done**)
 
 - Active deck control in the library and capture drawer.
 - `match_decks` snapshot on save; **Deck not set** for old logs.

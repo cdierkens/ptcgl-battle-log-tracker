@@ -3,37 +3,70 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { logSavedState } from "./capture-status";
 import { createAnalysisCache, type MatchAnalysis } from "./match-row";
-import { listLogs, type LogSummary, OVERLAY_STATE_EVENT, type OverlayStateEvent, readLog } from "./tauri";
+import {
+  DECKS_CHANGED_EVENT,
+  listLogs,
+  listMatchDecks,
+  type LogSummary,
+  type MatchDeck,
+  OVERLAY_STATE_EVENT,
+  type OverlayStateEvent,
+  readLog,
+} from "./tauri";
 
 export interface Match {
   analysis: MatchAnalysis | null;
+  deck: MatchDeck | null;
   log: LogSummary;
   raw: null | string;
 }
 
 export interface MatchesView {
+  deckError: null | string;
   error: null | string;
   matches: Match[] | null;
   refresh: () => void;
   refreshing: boolean;
 }
 
-/** Saved logs with their parsed summaries. Each saved log is read once; matches re-derive when the name changes. */
+/** Saved logs with their parsed summaries and immutable deck snapshots. */
 export function useMatches(playerName: string): MatchesView {
   const [logs, setLogs] = useState<LogSummary[] | null>(null);
+  const [matchDecks, setMatchDecks] = useState<ReadonlyMap<string, MatchDeck>>(new Map());
   const [raws, setRaws] = useState<ReadonlyMap<string, string>>(new Map());
   const [error, setError] = useState<null | string>(null);
+  const [deckError, setDeckError] = useState<null | string>(null);
   const [refreshing, setRefreshing] = useState(true);
   const requested = useRef(new Set<string>());
   // One cache per hook instance; repeat calls return the same analysis.
   const [analyze] = useState(createAnalysisCache);
 
-  const load = useCallback(() => {
+  const loadLogs = useCallback(() => {
     listLogs()
-      .then(setLogs)
+      .then((next) => {
+        setLogs(next);
+        setError(null);
+      })
       .catch((err: unknown) => setError(String(err)))
       .finally(() => setRefreshing(false));
   }, []);
+
+  const loadDecks = useCallback(() => {
+    listMatchDecks()
+      .then((decks) => {
+        setMatchDecks(new Map(decks.map((deck) => [deck.logFileName, deck])));
+        setDeckError(null);
+      })
+      .catch((err: unknown) => {
+        setMatchDecks(new Map());
+        setDeckError(String(err));
+      });
+  }, []);
+
+  const load = useCallback(() => {
+    loadLogs();
+    loadDecks();
+  }, [loadDecks, loadLogs]);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -54,6 +87,14 @@ export function useMatches(playerName: string): MatchesView {
   }, [refresh]);
 
   useEffect(() => {
+    const unlisten = listen(DECKS_CHANGED_EVENT, loadDecks);
+    unlisten.catch((err: unknown) => setDeckError(String(err)));
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, [loadDecks]);
+
+  useEffect(() => {
     if (logs === null) return;
     for (const log of logs) {
       if (requested.current.has(log.fileName)) continue;
@@ -68,9 +109,14 @@ export function useMatches(playerName: string): MatchesView {
     if (logs === null) return null;
     return logs.map((log) => {
       const raw = raws.get(log.fileName) ?? null;
-      return { analysis: raw === null ? null : analyze(log.fileName, raw, playerName), log, raw };
+      return {
+        analysis: raw === null ? null : analyze(log.fileName, raw, playerName),
+        deck: matchDecks.get(log.fileName) ?? null,
+        log,
+        raw,
+      };
     });
-  }, [analyze, logs, playerName, raws]);
+  }, [analyze, logs, matchDecks, playerName, raws]);
 
-  return { error, matches, refresh, refreshing };
+  return { deckError, error, matches, refresh, refreshing };
 }

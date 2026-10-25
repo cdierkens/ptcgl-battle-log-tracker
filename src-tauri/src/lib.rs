@@ -39,7 +39,7 @@ pub fn run() {
     use crate::platform::store::FsLogStore;
     use crate::ports::{OverlayPresenter, ScreenCaptureAccess, SecretStore};
     use crate::settings::{SettingsPaths, SharedSettings};
-    use crate::sink::{LogSink, StoreLogSink, SyncingLogSink};
+    use crate::sink::{DeckAssociatingSink, LogSink, StoreLogSink, SyncingLogSink};
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -77,6 +77,12 @@ pub fn run() {
             commands::list_decks,
             commands::save_deck,
             commands::archive_deck,
+            commands::get_active_deck,
+            commands::set_active_deck,
+            commands::list_match_decks,
+            commands::get_match_deck,
+            commands::assign_match_deck,
+            commands::clear_match_deck,
         ])
         // The drawer is the everyday UI; closing the main window only hides it (⌘Q quits).
         .on_window_event(|window, event| {
@@ -108,7 +114,7 @@ pub fn run() {
             })?;
             let deck_store: deck_store::SharedDeckStore = Arc::new(Mutex::new(deck_store));
             let sink: Arc<dyn LogSink> = Arc::new(SyncingLogSink::new(
-                StoreLogSink::new(FsLogStore::new(shared.clone())),
+                DeckAssociatingSink::new(StoreLogSink::new(FsLogStore::new(shared.clone())), deck_store.clone()),
                 shared.clone(),
                 queue.clone(),
                 results_up(state_cell.clone()),

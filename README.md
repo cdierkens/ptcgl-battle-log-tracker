@@ -6,7 +6,9 @@ only reads the screen. It never clicks, types, or reads game memory
 ([ADR 0001](docs/adr/0001-no-game-automation.md)).
 
 Tauri 2 (Rust) + React, shadcn/ui on Tailwind v4. Battle logs are parsed with
-[`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser).
+[`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser);
+decklists you paste into the deck library are parsed with
+[`@dierkens.dev/ptcg-decklist-tools`](https://www.npmjs.com/package/@dierkens.dev/ptcg-decklist-tools).
 macOS and Windows. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
 ### Demo
@@ -70,6 +72,9 @@ prints into Settings → Sync. Only debug builds accept its `http://localhost` U
 - **Settings:** the OS app-config folder, e.g.
   `~/Library/Application Support/dev.dierkens.ptcgl-tracker/settings.json`.
   Delete it to rerun first-run setup.
+- **Deck library:** `decks.sqlite` in the same app-data folder as settings. It
+  holds player-supplied decklists, immutable versions, and per-match snapshots;
+  it is never written into the log folder.
 
 See [ADR 0002](docs/adr/0002-log-folder-in-home-settings-in-app-config.md).
 

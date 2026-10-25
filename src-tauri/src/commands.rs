@@ -7,7 +7,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::clipboard::{ClipboardAccess, ClipboardProbe};
-use crate::deck_store::{self, Deck, SaveDeckInput, SharedDeckStore};
+use crate::deck_store::{self, Deck, MatchDeck, SaveDeckInput, SharedDeckStore};
 use crate::delivery_queue::{self, DeliveryQueue, Release, SharedQueue};
 use crate::destinations::{self, Destination, DestinationError, ImportPreview};
 use crate::diagnostics::Diagnostics;
@@ -27,6 +27,8 @@ pub fn is_first_run(paths: State<'_, SettingsPaths>) -> bool {
 
 /// Broadcast so every window reflects the latest settings.
 pub const SETTINGS_CHANGED_EVENT: &str = "settings://changed";
+/// Deck library, active deck, or match-snapshot changes. Both windows refresh.
+pub const DECKS_CHANGED_EVENT: &str = "decks://changed";
 
 #[tauri::command]
 pub fn get_settings(settings: State<'_, SharedSettings>) -> Settings {
@@ -163,19 +165,70 @@ pub fn get_sync_status(queue: State<'_, SharedQueue>) -> Result<SyncStatus, Stri
     sync_status::read(&delivery_queue::lock(&queue)).map_err(|e| e.to_string())
 }
 
+fn emit_decks_changed(app: &AppHandle) {
+    if let Err(e) = app.emit(DECKS_CHANGED_EVENT, ()) {
+        tracing::warn!("failed to emit decks changed: {e}");
+    }
+}
+
 #[tauri::command]
 pub fn list_decks(store: State<'_, SharedDeckStore>) -> Result<Vec<Deck>, String> {
     deck_store::lock(&store).list().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn save_deck(input: SaveDeckInput, store: State<'_, SharedDeckStore>) -> Result<Deck, String> {
-    deck_store::lock(&store).save(input).map_err(|e| e.to_string())
+pub fn save_deck(input: SaveDeckInput, store: State<'_, SharedDeckStore>, app: AppHandle) -> Result<Deck, String> {
+    let deck = deck_store::lock(&store).save(input).map_err(|e| e.to_string())?;
+    emit_decks_changed(&app);
+    Ok(deck)
 }
 
 #[tauri::command]
-pub fn archive_deck(id: String, store: State<'_, SharedDeckStore>) -> Result<(), String> {
-    deck_store::lock(&store).archive(&id).map_err(|e| e.to_string())
+pub fn archive_deck(id: String, store: State<'_, SharedDeckStore>, app: AppHandle) -> Result<(), String> {
+    deck_store::lock(&store).archive(&id).map_err(|e| e.to_string())?;
+    emit_decks_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_active_deck(store: State<'_, SharedDeckStore>) -> Result<Option<Deck>, String> {
+    deck_store::lock(&store).active_deck().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_active_deck(id: Option<String>, store: State<'_, SharedDeckStore>, app: AppHandle) -> Result<(), String> {
+    deck_store::lock(&store).set_active_deck(id.as_deref()).map_err(|e| e.to_string())?;
+    emit_decks_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_match_decks(store: State<'_, SharedDeckStore>) -> Result<Vec<MatchDeck>, String> {
+    deck_store::lock(&store).list_match_decks().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_match_deck(file_name: String, store: State<'_, SharedDeckStore>) -> Result<Option<MatchDeck>, String> {
+    deck_store::lock(&store).match_deck(&file_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn assign_match_deck(
+    file_name: String,
+    deck_id: String,
+    store: State<'_, SharedDeckStore>,
+    app: AppHandle,
+) -> Result<MatchDeck, String> {
+    let snapshot = deck_store::lock(&store).assign_match_deck(&file_name, &deck_id).map_err(|e| e.to_string())?;
+    emit_decks_changed(&app);
+    Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clear_match_deck(file_name: String, store: State<'_, SharedDeckStore>, app: AppHandle) -> Result<(), String> {
+    deck_store::lock(&store).clear_match_deck(&file_name).map_err(|e| e.to_string())?;
+    emit_decks_changed(&app);
+    Ok(())
 }
 
 /// Sends one saved log to a destination now: a first sync for an older match, or a retry.
@@ -267,12 +320,16 @@ fn trash_and_forget(
     settings: &SharedSettings,
     sink: &dyn LogSink,
     queue: &SharedQueue,
+    decks: &SharedDeckStore,
     file_name: &str,
 ) -> Result<(), String> {
     let text = logs::trash_log(&output_dir(settings), file_name)?;
     sink.forget(&text);
     if let Err(e) = delivery_queue::lock(queue).drop_held(file_name) {
         tracing::warn!("sync: couldn't drop held deliveries for {file_name}: {e}");
+    }
+    if let Err(e) = deck_store::lock(decks).clear_match_deck(file_name) {
+        tracing::warn!("deck: couldn't clear match snapshot for {file_name}: {e}");
     }
     Ok(())
 }
@@ -283,8 +340,12 @@ pub fn delete_log(
     settings: State<'_, SharedSettings>,
     sink: State<'_, Arc<dyn LogSink>>,
     queue: State<'_, SharedQueue>,
+    decks: State<'_, SharedDeckStore>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    trash_and_forget(settings.inner(), sink.inner().as_ref(), queue.inner(), &file_name)
+    trash_and_forget(settings.inner(), sink.inner().as_ref(), queue.inner(), decks.inner(), &file_name)?;
+    emit_decks_changed(&app);
+    Ok(())
 }
 
 /// Undo the latest save: trash it, forget it, and put the shield back up.
@@ -294,10 +355,13 @@ pub fn undo_last_save(
     settings: State<'_, SharedSettings>,
     sink: State<'_, Arc<dyn LogSink>>,
     queue: State<'_, SharedQueue>,
+    decks: State<'_, SharedDeckStore>,
     events: State<'_, Sender<OverlayEvent>>,
+    app: AppHandle,
 ) -> Result<(), String> {
     let file_name = logs::file_name_of(&path)?;
-    trash_and_forget(settings.inner(), sink.inner().as_ref(), queue.inner(), &file_name)?;
+    trash_and_forget(settings.inner(), sink.inner().as_ref(), queue.inner(), decks.inner(), &file_name)?;
+    emit_decks_changed(&app);
     let _ = events.send(OverlayEvent::SaveUndone);
     Ok(())
 }

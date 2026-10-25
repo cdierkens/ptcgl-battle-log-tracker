@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { StatusAlert } from "@/components/StatusAlert";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +10,12 @@ import type { CaptureStatusEvent } from "../lib/tauri";
 import { chipForState, isResultsState, matchNeedsPaste } from "../lib/capture-status";
 import { needsAttention } from "../lib/status-history";
 import { syncNeedsAttention } from "../lib/sync-status";
+import { useDecks } from "../lib/use-decks";
 import { useMatches } from "../lib/use-matches";
 import { useOverlayState } from "../lib/use-overlay-state";
 import { useSettings } from "../lib/use-settings";
 import { useSyncStatus } from "../lib/use-sync-status";
+import { ActiveDeckPicker } from "./ActiveDeckPicker";
 import { HelpTab } from "./HelpTab";
 import { MatchCard } from "./MatchCard";
 import { MatchList } from "./MatchList";
@@ -34,10 +36,12 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
   const overlay = useOverlayState();
   const settings = useSettings();
   const playerName = settings.settings?.player_name ?? "";
+  const decks = useDecks();
   const matches = useMatches(playerName);
   const sync = useSyncStatus();
   const destinations = settings.settings?.destinations ?? [];
   const chip = overlay.state === null ? null : chipForState(overlay.state);
+  const [tab, setTab] = useState("matches");
   const attention = needsAttention(history);
   const errors = [overlay.error, settings.error, historyError, sync.error].filter((e): e is string => e !== null);
 
@@ -59,6 +63,18 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
           {message}
         </StatusAlert>
       ))}
+      {onClose !== undefined ? (
+        <div className="border-b border-border px-4 py-2">
+          <ActiveDeckPicker
+            activeDeck={decks.activeDeck}
+            decks={decks.decks}
+            disabled={decks.saving}
+            error={decks.error}
+            onChange={(id) => void decks.setActive(id)}
+            variant="compact"
+          />
+        </div>
+      ) : null}
       {isResultsState(overlay.state) ? (
         <MatchCard
           clipboardOn={settings.settings?.clipboard_autosave ?? false}
@@ -68,7 +84,7 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
           playerName={playerName}
         />
       ) : null}
-      <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="matches">
+      <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setTab} value={tab}>
         <TabsList aria-label="Sections" className="mx-4 mt-2" variant="line">
           <TabsTrigger value="matches">Matches</TabsTrigger>
           {onClose === undefined ? <TabsTrigger value="decks">Decks</TabsTrigger> : null}
@@ -87,7 +103,14 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
               <PasteForm matchState={null} onSaved={matches.refresh} />
             </section>
           )}
-          <MatchList destinations={destinations} matches={matches} playerName={playerName} sync={sync.status} />
+          <MatchList
+            decks={decks}
+            destinations={destinations}
+            matches={matches}
+            onOpenDecks={onClose === undefined ? () => setTab("decks") : undefined}
+            playerName={playerName}
+            sync={sync.status}
+          />
         </TabsContent>
         {onClose === undefined ? (
           <TabsContent className="min-h-0 overflow-y-auto" value="decks">
