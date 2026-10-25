@@ -57,6 +57,7 @@ export interface Destination {
   headers: Record<string, string>;
   id: string;
   name: string;
+  send_deck_identity: boolean;
   token_url: null | string;
   url: string;
 }
@@ -181,6 +182,8 @@ export const importDestination = (config: string, token: null | string) =>
   invoke<void>("import_destination", { config, token });
 export const setDestinationEnabled = (id: string, enabled: boolean) =>
   invoke<void>("set_destination_enabled", { enabled, id });
+export const setDestinationDeckIdentity = (id: string, enabled: boolean) =>
+  invoke<void>("set_destination_deck_identity", { enabled, id });
 export const removeDestination = (id: string) => invoke<void>("remove_destination", { id });
 export const openTokenPage = (config: string) => invoke<void>("open_token_page", { config });
 export const openDestinationTokenPage = (id: string) => invoke<void>("open_destination_token_page", { id });

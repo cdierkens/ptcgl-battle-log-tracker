@@ -319,6 +319,7 @@ mod tests {
                 headers: BTreeMap::new(),
                 token_url: None,
                 enabled,
+                send_deck_identity: false,
             }
         }
 
