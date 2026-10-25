@@ -499,6 +499,18 @@ mod tests {
     }
 
     #[test]
+    fn a_destination_rejecting_the_deck_payload_fails_only_that_delivery() {
+        let rig = Rig::new("deck-rejected");
+        rig.seed_deck(Some("TEF-30C"));
+        rig.enable_deck_identity();
+        rig.respond(Ok(422));
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        assert_eq!(rig.state(), Some(DeliveryState::Failed));
+        assert!(rig.dir.join(LOG).exists(), "the local log stays");
+    }
+
+    #[test]
     fn a_deck_store_failure_falls_back_to_the_base_envelope() {
         let mut rig = Rig::new("deck-unavailable");
         rig.worker.decks = Arc::new(Mutex::new(DeckStore::open_in_memory().unwrap()));

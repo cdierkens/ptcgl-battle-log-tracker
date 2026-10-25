@@ -289,8 +289,7 @@ pub fn replace_token(
 }
 
 pub fn set_enabled(destinations: &mut [Destination], id: &str, enabled: bool) -> Result<(), DestinationError> {
-    let destination = destinations.iter_mut().find(|d| d.id == id).ok_or(DestinationError::NotFound)?;
-    destination.enabled = enabled;
+    find_mut(destinations, id)?.enabled = enabled;
     Ok(())
 }
 
@@ -299,9 +298,12 @@ pub fn set_send_deck_identity(
     id: &str,
     enabled: bool,
 ) -> Result<(), DestinationError> {
-    let destination = destinations.iter_mut().find(|d| d.id == id).ok_or(DestinationError::NotFound)?;
-    destination.send_deck_identity = enabled;
+    find_mut(destinations, id)?.send_deck_identity = enabled;
     Ok(())
+}
+
+fn find_mut<'a>(destinations: &'a mut [Destination], id: &str) -> Result<&'a mut Destination, DestinationError> {
+    destinations.iter_mut().find(|d| d.id == id).ok_or(DestinationError::NotFound)
 }
 
 pub fn remove(destinations: &mut Vec<Destination>, id: &str) -> Result<(), DestinationError> {
