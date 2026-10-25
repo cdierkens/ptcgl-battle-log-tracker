@@ -46,6 +46,24 @@ describe("analyzeDecklist", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.length).toBeGreaterThan(0);
   });
+
+  it("accepts PTCGL's grouped section counts without warnings", () => {
+    const ptcgl = DRAGAPULT.replace("Trainer: 4", "Trainer: 1").replace("Energy: 2", "Energy: 1");
+    const result = preview(ptcgl);
+
+    expect(result.sections).toEqual([
+      { count: 1, section: "pokemon" },
+      { count: 4, section: "trainer" },
+      { count: 2, section: "energy" },
+    ]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("keeps a section warning when the header matches neither copies nor lines", () => {
+    const result = preview(DRAGAPULT.replace("Trainer: 4", "Trainer: 2"));
+
+    expect(result.warnings.join(" ")).toContain("trainer header declares 2, parsed 4");
+  });
 });
 
 describe("identityOf", () => {
