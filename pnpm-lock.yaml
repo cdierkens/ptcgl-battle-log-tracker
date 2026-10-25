@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@dierkens.dev/ptcg-decklist-tools':
+        specifier: 0.2.0
+        version: 0.2.0
       '@dierkens.dev/ptcgl-battle-log-parser':
         specifier: 1.1.0
         version: 1.1.0
@@ -239,6 +242,10 @@ packages:
 
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
+
+  '@dierkens.dev/ptcg-decklist-tools@0.2.0':
+    resolution: {integrity: sha512-+n/UR+DGx/iHppheYjgkxDR1Yoni2BT93HVHRWrPCzKXhHQ3i1j3QLuAPFAOGuc2NRFmoxDDhQ6bOjlyEiaMqQ==}
+    engines: {node: '>=22.12.0'}
 
   '@dierkens.dev/ptcgl-battle-log-parser@1.1.0':
     resolution: {integrity: sha512-6vmKndI5zAfBjGfAsGjkmIQcyXqVFBgwX7zqIq4JqMGePx6L//pvGIVMzBU26ttIIf7URE3LHXYv67Wl0EJiQA==}
@@ -3516,6 +3523,8 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
+
+  '@dierkens.dev/ptcg-decklist-tools@0.2.0': {}
 
   '@dierkens.dev/ptcgl-battle-log-parser@1.1.0': {}
 

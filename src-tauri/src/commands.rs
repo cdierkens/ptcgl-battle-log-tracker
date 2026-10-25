@@ -7,6 +7,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::clipboard::{ClipboardAccess, ClipboardProbe};
+use crate::deck_store::{self, Deck, SaveDeckInput, SharedDeckStore};
 use crate::delivery_queue::{self, DeliveryQueue, Release, SharedQueue};
 use crate::destinations::{self, Destination, DestinationError, ImportPreview};
 use crate::diagnostics::Diagnostics;
@@ -160,6 +161,21 @@ pub fn retry_destination(id: String, app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn get_sync_status(queue: State<'_, SharedQueue>) -> Result<SyncStatus, String> {
     sync_status::read(&delivery_queue::lock(&queue)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_decks(store: State<'_, SharedDeckStore>) -> Result<Vec<Deck>, String> {
+    deck_store::lock(&store).list().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_deck(input: SaveDeckInput, store: State<'_, SharedDeckStore>) -> Result<Deck, String> {
+    deck_store::lock(&store).save(input).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn archive_deck(id: String, store: State<'_, SharedDeckStore>) -> Result<(), String> {
+    deck_store::lock(&store).archive(&id).map_err(|e| e.to_string())
 }
 
 /// Sends one saved log to a destination now: a first sync for an older match, or a retry.

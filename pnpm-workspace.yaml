@@ -1,2 +1,4 @@
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@dierkens.dev/ptcg-decklist-tools@0.2.0'
