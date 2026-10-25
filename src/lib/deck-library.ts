@@ -63,6 +63,16 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
   };
 }
 
+/**
+ * Provenance only; parsing accepts any of these shapes. Section headers plus a
+ * Total Cards line identify a PTCGL/Limitless export; anything else is typed.
+ */
+export function deckSource(text: string): "ptcgl" | "typed" {
+  const sections = /^\s*(Pokémon|Pokemon|Trainer|Energy)\s*:\s*\d+/m.test(text);
+  const total = /^\s*Total Cards\s*:\s*\d+/im.test(text);
+  return sections && total ? "ptcgl" : "typed";
+}
+
 /** The two hashes and the versions needed to compare them later. */
 export async function identityOf(deck: NormalizedDeck): Promise<DeckIdentity> {
   const [functional, exact] = await Promise.all([deckId(deck), listId(deck)]);

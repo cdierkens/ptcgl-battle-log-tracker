@@ -16,17 +16,11 @@ import { Button } from "@/components/ui/button";
 
 import type { Deck, SaveDeckInput } from "../lib/tauri";
 
-import { analyzeDecklist, identityOf } from "../lib/deck-library";
+import { BLANK_DECK_DRAFT, type DeckDraft, selectedArchetype } from "../lib/deck-draft";
+import { analyzeDecklist, deckSource, identityOf } from "../lib/deck-library";
 import { useDecks } from "../lib/use-decks";
 import { ActiveDeckPicker } from "./ActiveDeckPicker";
-import {
-  BLANK_DECK_DRAFT,
-  type DeckDraft,
-  DeckForm,
-  type DeckSource,
-  selectedArchetype,
-  SOURCE_OPTIONS,
-} from "./DeckForm";
+import { DeckForm } from "./DeckForm";
 
 /** The main-window deck library. The capture drawer gets the compact active-deck control. */
 export function DecksTab() {
@@ -59,7 +53,6 @@ export function DecksTab() {
       archetypeKey: version.archetype?.id ?? version.archetype?.label ?? "",
       formatLabel: version.formatLabel ?? "",
       name: deck.name,
-      source: SOURCE_OPTIONS.includes(version.source as DeckSource) ? (version.source as DeckSource) : "typed",
       text: version.rawText,
     });
     setFormError(null);
@@ -91,7 +84,7 @@ export function DecksTab() {
         listIdHash: identity.listId,
         name: draft.name.trim(),
         rawText: draft.text,
-        source: draft.source,
+        source: deckSource(draft.text),
       };
 
       const saved = await decks.save(input);

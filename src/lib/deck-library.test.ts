@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeDecklist, identityOf, isFormatWindow } from "./deck-library";
+import { analyzeDecklist, deckSource, identityOf, isFormatWindow } from "./deck-library";
 
 const DRAGAPULT = `Pokémon: 1
 1 Dragapult ex TWM 130
@@ -64,5 +64,12 @@ describe("isFormatWindow", () => {
   it("distinguishes a set window from an opaque label", () => {
     expect(isFormatWindow("TEF-30C")).toBe(true);
     expect(isFormatWindow("Expanded")).toBe(false);
+  });
+});
+
+describe("deckSource", () => {
+  it("recognises an export and treats a bare list as typed", () => {
+    expect(deckSource(DRAGAPULT)).toBe("ptcgl");
+    expect(deckSource("4 Ultra Ball SVI 196\n2 Basic Fire Energy MEE 10")).toBe("typed");
   });
 });

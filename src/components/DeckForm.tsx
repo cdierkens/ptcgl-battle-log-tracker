@@ -7,34 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import type { Deck, SaveDeckInput } from "../lib/tauri";
+import type { DeckDraft } from "../lib/deck-draft";
+import type { Deck } from "../lib/tauri";
 
 import { analyzeDecklist, type DeckPreview, isFormatWindow } from "../lib/deck-library";
 import { SELECT_CLASS } from "../lib/form-styles";
-
-export const SOURCE_OPTIONS = ["ptcgl", "limitless", "typed"] as const;
-export type DeckSource = (typeof SOURCE_OPTIONS)[number];
-const SOURCE_LABELS: Record<DeckSource, string> = {
-  limitless: "Limitless",
-  ptcgl: "PTCGL export",
-  typed: "Typed list",
-};
-
-export interface DeckDraft {
-  archetypeKey: string;
-  formatLabel: string;
-  name: string;
-  source: DeckSource;
-  text: string;
-}
-
-export const BLANK_DECK_DRAFT: DeckDraft = {
-  archetypeKey: "",
-  formatLabel: "",
-  name: "",
-  source: "typed",
-  text: "",
-};
 
 interface DeckFormProps {
   analysis: ReturnType<typeof analyzeDecklist>;
@@ -77,18 +54,6 @@ export function DeckForm({
       <Field>
         <FieldLabel htmlFor="deck-name">Name</FieldLabel>
         <Input id="deck-name" onChange={(event) => onChange({ name: event.target.value })} placeholder="League deck" value={draft.name} />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="deck-source">Source</FieldLabel>
-        <select
-          className={cn(SELECT_CLASS, "h-10 w-full")}
-          id="deck-source"
-          onChange={(event) => onChange({ source: event.target.value as DeckSource })}
-          value={draft.source}
-        >
-          {SOURCE_OPTIONS.map((option) => <option key={option} value={option}>{SOURCE_LABELS[option]}</option>)}
-        </select>
       </Field>
 
       <Field data-invalid={!analysis.ok || undefined}>
@@ -175,17 +140,6 @@ export function DeckForm({
       </div>
     </div>
   );
-}
-
-export function selectedArchetype(preview: DeckPreview, key: string, editing: Deck | null): SaveDeckInput["archetype"] {
-  const suggestion = preview.archetypeSuggestions.find((candidate) => candidate.id === key);
-  if (suggestion !== undefined) {
-    return { cards: [...suggestion.cards], id: suggestion.id, label: suggestion.label };
-  }
-  if (key !== "" && editing?.currentVersion.archetype !== null && editing?.currentVersion.archetype !== undefined && (editing.currentVersion.archetype.id ?? editing.currentVersion.archetype.label) === key) {
-    return editing.currentVersion.archetype;
-  }
-  return null;
 }
 
 function evidenceText(suggestion: DeckPreview["archetypeSuggestions"][number]): string {
