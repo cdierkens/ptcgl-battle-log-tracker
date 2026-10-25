@@ -768,6 +768,51 @@ mod tests {
     }
 
     #[test]
+    fn adds_slice_two_tables_to_an_existing_version_one_database() {
+        let dir = std::env::temp_dir().join(format!("ptcgl-decks-v1-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("decks.sqlite");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE decks (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    current_version_id TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    archived_at INTEGER
+                 );
+                 CREATE TABLE deck_versions (
+                    id TEXT PRIMARY KEY,
+                    deck_id TEXT NOT NULL REFERENCES decks(id),
+                    source TEXT NOT NULL,
+                    raw_text TEXT NOT NULL,
+                    decklist_text TEXT NOT NULL,
+                    format_label TEXT,
+                    archetype_json TEXT,
+                    deck_id_hash TEXT,
+                    list_id_hash TEXT,
+                    hash_version INTEGER,
+                    catalog_version TEXT,
+                    catalog_context_id TEXT,
+                    created_at INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 1;",
+            )
+            .unwrap();
+        }
+
+        let mut store = DeckStore::open(&path).unwrap();
+        let deck = store.save(input(None, "League deck")).unwrap();
+        store.set_active_deck(Some(&deck.id)).unwrap();
+        assert_eq!(store.active_deck().unwrap().map(|active| active.id), Some(deck.id));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn in_memory_fallback_cannot_store_active_or_match_state() {
         let mut store = DeckStore::open_in_memory().unwrap();
         assert!(matches!(store.set_active_deck(None), Err(DeckStoreError::Unavailable)));

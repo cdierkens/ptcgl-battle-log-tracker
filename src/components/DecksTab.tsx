@@ -19,33 +19,30 @@ import type { Deck, SaveDeckInput } from "../lib/tauri";
 import { analyzeDecklist, identityOf } from "../lib/deck-library";
 import { useDecks } from "../lib/use-decks";
 import { ActiveDeckPicker } from "./ActiveDeckPicker";
-import { DeckForm, type DeckSource, selectedArchetype, SOURCE_OPTIONS } from "./DeckForm";
-
-const BLANK_TEXT = "";
+import {
+  BLANK_DECK_DRAFT,
+  type DeckDraft,
+  DeckForm,
+  type DeckSource,
+  selectedArchetype,
+  SOURCE_OPTIONS,
+} from "./DeckForm";
 
 /** The main-window deck library. The capture drawer gets the compact active-deck control. */
 export function DecksTab() {
   const decks = useDecks();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Deck | null>(null);
-  const [name, setName] = useState("");
-  const [text, setText] = useState(BLANK_TEXT);
-  const [source, setSource] = useState<DeckSource>("typed");
-  const [formatLabel, setFormatLabel] = useState("");
-  const [archetypeKey, setArchetypeKey] = useState("");
+  const [draft, setDraft] = useState<DeckDraft>(BLANK_DECK_DRAFT);
   const [formError, setFormError] = useState<null | string>(null);
   const [pendingArchive, setPendingArchive] = useState<Deck | null>(null);
 
-  const analysis = useMemo(() => analyzeDecklist(text), [text]);
+  const analysis = useMemo(() => analyzeDecklist(draft.text), [draft.text]);
   const preview = analysis.ok ? analysis.preview : null;
 
   const reset = () => {
     setEditing(null);
-    setName("");
-    setText(BLANK_TEXT);
-    setSource("typed");
-    setFormatLabel("");
-    setArchetypeKey("");
+    setDraft(BLANK_DECK_DRAFT);
     setFormError(null);
     setShowForm(false);
   };
@@ -58,17 +55,19 @@ export function DecksTab() {
   const startEdit = (deck: Deck) => {
     const version = deck.currentVersion;
     setEditing(deck);
-    setName(deck.name);
-    setText(version.rawText);
-    setSource(SOURCE_OPTIONS.includes(version.source as DeckSource) ? (version.source as DeckSource) : "typed");
-    setFormatLabel(version.formatLabel ?? "");
-    setArchetypeKey(version.archetype?.id ?? version.archetype?.label ?? "");
+    setDraft({
+      archetypeKey: version.archetype?.id ?? version.archetype?.label ?? "",
+      formatLabel: version.formatLabel ?? "",
+      name: deck.name,
+      source: SOURCE_OPTIONS.includes(version.source as DeckSource) ? (version.source as DeckSource) : "typed",
+      text: version.rawText,
+    });
     setFormError(null);
     setShowForm(true);
   };
 
   const save = async () => {
-    if (name.trim() === "") {
+    if (draft.name.trim() === "") {
       setFormError("Give the deck a name.");
       return;
     }
@@ -78,7 +77,7 @@ export function DecksTab() {
     }
 
     try {
-      const selected = selectedArchetype(analysis.preview, archetypeKey, editing);
+      const selected = selectedArchetype(analysis.preview, draft.archetypeKey, editing);
       const identity = await identityOf(analysis.preview.deck);
       const input: SaveDeckInput = {
         archetype: selected,
@@ -86,13 +85,13 @@ export function DecksTab() {
         catalogVersion: identity.catalogVersion,
         deckIdHash: identity.deckId,
         decklistText: analysis.preview.decklist,
-        formatLabel: formatLabel.trim() === "" ? null : formatLabel.trim(),
+        formatLabel: draft.formatLabel.trim() === "" ? null : draft.formatLabel.trim(),
         hashVersion: identity.hashVersion,
         id: editing?.id,
         listIdHash: identity.listId,
-        name: name.trim(),
-        rawText: text,
-        source,
+        name: draft.name.trim(),
+        rawText: draft.text,
+        source: draft.source,
       };
 
       const saved = await decks.save(input);
@@ -132,21 +131,13 @@ export function DecksTab() {
       {showForm ? (
         <DeckForm
           analysis={analysis}
-          archetypeKey={archetypeKey}
+          draft={draft}
           editing={editing}
-          formatLabel={formatLabel}
-          name={name}
-          onArchetypeChange={setArchetypeKey}
           onCancel={reset}
-          onFormatChange={setFormatLabel}
-          onNameChange={setName}
+          onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
           onSave={() => void save()}
-          onSourceChange={setSource}
-          onTextChange={setText}
           preview={preview}
           saving={decks.saving}
-          source={source}
-          text={text}
         />
       ) : null}
 

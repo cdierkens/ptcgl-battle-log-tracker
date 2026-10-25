@@ -14,53 +14,58 @@ import { SELECT_CLASS } from "../lib/form-styles";
 
 export const SOURCE_OPTIONS = ["ptcgl", "limitless", "typed"] as const;
 export type DeckSource = (typeof SOURCE_OPTIONS)[number];
+const SOURCE_LABELS: Record<DeckSource, string> = {
+  limitless: "Limitless",
+  ptcgl: "PTCGL export",
+  typed: "Typed list",
+};
 
-interface DeckFormProps {
-  analysis: ReturnType<typeof analyzeDecklist>;
+export interface DeckDraft {
   archetypeKey: string;
-  editing: Deck | null;
   formatLabel: string;
   name: string;
-  onArchetypeChange: (value: string) => void;
-  onCancel: () => void;
-  onFormatChange: (value: string) => void;
-  onNameChange: (value: string) => void;
-  onSave: () => void;
-  onSourceChange: (value: DeckSource) => void;
-  onTextChange: (value: string) => void;
-  preview: DeckPreview | null;
-  saving: boolean;
   source: DeckSource;
   text: string;
 }
 
+export const BLANK_DECK_DRAFT: DeckDraft = {
+  archetypeKey: "",
+  formatLabel: "",
+  name: "",
+  source: "typed",
+  text: "",
+};
+
+interface DeckFormProps {
+  analysis: ReturnType<typeof analyzeDecklist>;
+  draft: DeckDraft;
+  editing: Deck | null;
+  onCancel: () => void;
+  onChange: (patch: Partial<DeckDraft>) => void;
+  onSave: () => void;
+  preview: DeckPreview | null;
+  saving: boolean;
+}
+
 export function DeckForm({
   analysis,
-  archetypeKey,
+  draft,
   editing,
-  formatLabel,
-  name,
-  onArchetypeChange,
   onCancel,
-  onFormatChange,
-  onNameChange,
+  onChange,
   onSave,
-  onSourceChange,
-  onTextChange,
   preview,
   saving,
-  source,
-  text,
 }: DeckFormProps) {
   const suggestions = preview?.archetypeSuggestions ?? [];
   const storedArchetype = editing?.currentVersion.archetype ?? null;
   const storedOption = storedArchetype !== null && !suggestions.some((suggestion) => suggestion.id === storedArchetype.id)
     ? storedArchetype
     : null;
-  const shownSuggestion = suggestions.find((suggestion) => suggestion.id === archetypeKey)
-    ?? (archetypeKey === "" ? suggestions[0] : undefined);
+  const shownSuggestion = suggestions.find((suggestion) => suggestion.id === draft.archetypeKey)
+    ?? (draft.archetypeKey === "" ? suggestions[0] : undefined);
   const storedSelected =
-    storedOption !== null && (storedOption.id ?? storedOption.label) === archetypeKey;
+    storedOption !== null && (storedOption.id ?? storedOption.label) === draft.archetypeKey;
 
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
@@ -71,7 +76,7 @@ export function DeckForm({
 
       <Field>
         <FieldLabel htmlFor="deck-name">Name</FieldLabel>
-        <Input id="deck-name" onChange={(event) => onNameChange(event.target.value)} placeholder="League deck" value={name} />
+        <Input id="deck-name" onChange={(event) => onChange({ name: event.target.value })} placeholder="League deck" value={draft.name} />
       </Field>
 
       <Field>
@@ -79,10 +84,10 @@ export function DeckForm({
         <select
           className={cn(SELECT_CLASS, "h-10 w-full")}
           id="deck-source"
-          onChange={(event) => onSourceChange(event.target.value as DeckSource)}
-          value={source}
+          onChange={(event) => onChange({ source: event.target.value as DeckSource })}
+          value={draft.source}
         >
-          {SOURCE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          {SOURCE_OPTIONS.map((option) => <option key={option} value={option}>{SOURCE_LABELS[option]}</option>)}
         </select>
       </Field>
 
@@ -91,9 +96,9 @@ export function DeckForm({
         <Textarea
           className="min-h-40 font-mono text-xs"
           id="decklist"
-          onChange={(event) => onTextChange(event.target.value)}
+          onChange={(event) => onChange({ text: event.target.value })}
           placeholder="Paste a PTCGL export, a Limitless list, or type the list"
-          value={text}
+          value={draft.text}
         />
         <FieldDescription>Parsed locally. The original text and a portable PTCGL render are stored.</FieldDescription>
         <FieldError>{analysis.ok ? null : analysis.errors.join(" ")}</FieldError>
@@ -116,17 +121,17 @@ export function DeckForm({
             <Input
               id="deck-format"
               list="deck-format-candidates"
-              onChange={(event) => onFormatChange(event.target.value)}
+              onChange={(event) => onChange({ formatLabel: event.target.value })}
               placeholder="TEF-30C"
-              value={formatLabel}
+              value={draft.formatLabel}
             />
             <datalist id="deck-format-candidates">
               {preview.formatCandidates.map((candidate) => <option key={candidate} value={candidate} />)}
             </datalist>
             <FieldDescription>
-              {formatLabel.trim() === ""
+              {draft.formatLabel.trim() === ""
                 ? "Pick a fitting window or type a confirmed label."
-                : isFormatWindow(formatLabel)
+                : isFormatWindow(draft.formatLabel)
                   ? "A set window."
                   : "Not a set window. It will be stored as a confirmed label."}
             </FieldDescription>
@@ -137,8 +142,8 @@ export function DeckForm({
             <select
               className={cn(SELECT_CLASS, "h-10 w-full")}
               id="deck-archetype"
-              onChange={(event) => onArchetypeChange(event.target.value)}
-              value={archetypeKey}
+              onChange={(event) => onChange({ archetypeKey: event.target.value })}
+              value={draft.archetypeKey}
             >
               <option value="">No archetype confirmed</option>
               {storedOption !== null ? <option value={storedOption.id ?? storedOption.label}>{storedOption.label}</option> : null}

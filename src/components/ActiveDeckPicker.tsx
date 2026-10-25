@@ -7,6 +7,7 @@ import type { Deck } from "../lib/tauri";
 
 import { deckLabel } from "../lib/deck-label";
 import { SELECT_CLASS } from "../lib/form-styles";
+import { DeckOptions } from "./DeckOptions";
 
 interface ActiveDeckPickerProps {
   activeDeck: Deck | null;
@@ -43,11 +44,7 @@ export function ActiveDeckPicker({
       {activeDeck !== null && !choices.some((deck) => deck.id === activeDeck.id) ? (
         <option value={activeDeck.id}>{deckLabel(activeDeck)}</option>
       ) : null}
-      {choices.map((deck) => (
-        <option key={deck.id} value={deck.id}>
-          {deckLabel(deck)}
-        </option>
-      ))}
+      <DeckOptions decks={choices} />
     </select>
   );
 

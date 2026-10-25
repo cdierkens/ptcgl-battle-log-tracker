@@ -83,6 +83,7 @@ pub fn run() {
             commands::get_match_deck,
             commands::assign_match_deck,
             commands::clear_match_deck,
+            commands::open_decks,
         ])
         // The drawer is the everyday UI; closing the main window only hides it (⌘Q quits).
         .on_window_event(|window, event| {
@@ -202,7 +203,7 @@ fn open_queue(app: &tauri::AppHandle) -> Result<delivery_queue::DeliveryQueue, d
     })
 }
 
-fn show_main(app: &tauri::AppHandle) {
+pub(crate) fn show_main(app: &tauri::AppHandle) {
     use tauri::Manager;
 
     if let Some(main) = app.get_webview_window("main") {

@@ -1,15 +1,15 @@
-import { lazy, Suspense, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import { StatusAlert } from "@/components/StatusAlert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import type { CaptureStatusEvent } from "../lib/tauri";
-
 import { chipForState, isResultsState, matchNeedsPaste } from "../lib/capture-status";
 import { needsAttention } from "../lib/status-history";
 import { syncNeedsAttention } from "../lib/sync-status";
+import { type CaptureStatusEvent, OPEN_DECKS_EVENT, openDecks } from "../lib/tauri";
 import { useDecks } from "../lib/use-decks";
 import { useMatches } from "../lib/use-matches";
 import { useOverlayState } from "../lib/use-overlay-state";
@@ -44,6 +44,24 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
   const [tab, setTab] = useState("matches");
   const attention = needsAttention(history);
   const errors = [overlay.error, settings.error, historyError, sync.error].filter((e): e is string => e !== null);
+
+  useEffect(() => {
+    if (onClose !== undefined) return;
+    const unlisten = listen(OPEN_DECKS_EVENT, () => setTab("decks"));
+    unlisten.catch(() => undefined);
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, [onClose]);
+
+  const openDeckLibrary = () => {
+    if (onClose === undefined) {
+      setTab("decks");
+      return;
+    }
+    onClose();
+    void openDecks();
+  };
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -107,7 +125,7 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
             decks={decks}
             destinations={destinations}
             matches={matches}
-            onOpenDecks={onClose === undefined ? () => setTab("decks") : undefined}
+            onOpenDecks={openDeckLibrary}
             playerName={playerName}
             sync={sync.status}
           />

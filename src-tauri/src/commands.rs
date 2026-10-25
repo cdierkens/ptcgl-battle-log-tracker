@@ -29,6 +29,8 @@ pub fn is_first_run(paths: State<'_, SettingsPaths>) -> bool {
 pub const SETTINGS_CHANGED_EVENT: &str = "settings://changed";
 /// Deck library, active deck, or match-snapshot changes. Both windows refresh.
 pub const DECKS_CHANGED_EVENT: &str = "decks://changed";
+/// The drawer asks the main window to show its Decks tab.
+pub const OPEN_DECKS_EVENT: &str = "decks://open";
 
 #[tauri::command]
 pub fn get_settings(settings: State<'_, SharedSettings>) -> Settings {
@@ -229,6 +231,16 @@ pub fn clear_match_deck(file_name: String, store: State<'_, SharedDeckStore>, ap
     deck_store::lock(&store).clear_match_deck(&file_name).map_err(|e| e.to_string())?;
     emit_decks_changed(&app);
     Ok(())
+}
+
+/// Bring the main window forward on its Decks tab. The drawer cannot show the
+/// full library, so its match-detail edit link delegates here.
+#[tauri::command]
+pub fn open_decks(app: AppHandle) {
+    crate::show_main(&app);
+    if let Err(e) = app.emit(OPEN_DECKS_EVENT, ()) {
+        tracing::warn!("failed to emit open decks: {e}");
+    }
 }
 
 /// Sends one saved log to a destination now: a first sync for an older match, or a retry.

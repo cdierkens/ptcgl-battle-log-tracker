@@ -5,13 +5,12 @@ import { StatusAlert } from "@/components/StatusAlert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import type { Deck } from "../lib/tauri";
 import type { DecksView } from "../lib/use-decks";
 import type { Match } from "../lib/use-matches";
 
-import { deckLabel } from "../lib/deck-label";
 import { SELECT_CLASS } from "../lib/form-styles";
 import { assignMatchDeck, clearMatchDeck } from "../lib/tauri";
+import { DeckOptions } from "./DeckOptions";
 
 const DeckSnapshotWarnings = lazy(() =>
   import("./DeckSnapshotWarnings").then((module) => ({ default: module.DeckSnapshotWarnings })),
@@ -92,11 +91,7 @@ export function MatchDeckPanel({ decks, match, onChanged, onOpenDecks }: MatchDe
             value={selected}
           >
             <option value="">No deck</option>
-            {(decks.decks ?? []).map((deck: Deck) => (
-              <option key={deck.id} value={deck.id}>
-                {deckLabel(deck)}
-              </option>
-            ))}
+            <DeckOptions decks={decks.decks} />
           </select>
           <p className="text-xs text-muted-foreground">
             Saving snapshots the deck's current version. The old match snapshot is replaced; the
