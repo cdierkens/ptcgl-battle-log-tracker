@@ -25,6 +25,7 @@ import { useDecks } from "../lib/use-decks";
 
 const BLANK_TEXT = "";
 const SOURCE_OPTIONS = ["ptcgl", "limitless", "typed"] as const;
+const SELECT_CLASS = "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
 /** The main-window deck library. The capture drawer only needs an active-deck control later. */
 export function DecksTab() {
@@ -116,7 +117,7 @@ export function DecksTab() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Decks</h2>
-          <p className="text-xs text-muted-foreground">Keep a list ready, then choose it when you save a match.</p>
+          <p className="text-xs text-muted-foreground">Keep a list ready for the matches you save.</p>
         </div>
         <Button onClick={startAdd} size="sm">Add deck</Button>
       </div>
@@ -252,7 +253,7 @@ function DeckForm({
       <Field>
         <FieldLabel htmlFor="deck-source">Source</FieldLabel>
         <select
-          className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className={SELECT_CLASS}
           id="deck-source"
           onChange={(event) => onSourceChange(event.target.value as (typeof SOURCE_OPTIONS)[number])}
           value={source}
@@ -310,7 +311,7 @@ function DeckForm({
           <Field>
             <FieldLabel htmlFor="deck-archetype">Archetype</FieldLabel>
             <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className={SELECT_CLASS}
               id="deck-archetype"
               onChange={(event) => onArchetypeChange(event.target.value)}
               value={archetypeKey}
