@@ -19,10 +19,16 @@ export function DeckSnapshotWarnings({
   onEditDeck?: () => void;
 }) {
   const analysis = useMemo(() => analyzeDecklist(decklistText), [decklistText]);
+  const editAction =
+    onEditDeck === undefined ? undefined : (
+      <Button onClick={onEditDeck} size="sm" variant="outline">
+        Edit deck
+      </Button>
+    );
 
   if (!analysis.ok) {
     return (
-      <StatusAlert tone="info">
+      <StatusAlert actions={editAction} tone="info">
         Couldn't re-check this deck snapshot with the current catalog: {analysis.errors.join(" ")}
       </StatusAlert>
     );
@@ -41,16 +47,7 @@ export function DeckSnapshotWarnings({
   if (notes.length === 0) return null;
 
   return (
-    <StatusAlert
-      actions={
-        onEditDeck === undefined ? undefined : (
-          <Button onClick={onEditDeck} size="sm" variant="outline">
-            Edit deck
-          </Button>
-        )
-      }
-      tone="info"
-    >
+    <StatusAlert actions={editAction} tone="info">
       {notes.join(" ")}
     </StatusAlert>
   );

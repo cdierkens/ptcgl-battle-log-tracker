@@ -72,9 +72,9 @@ prints into Settings → Sync. Only debug builds accept its `http://localhost` U
 - **Settings:** the OS app-config folder, e.g.
   `~/Library/Application Support/dev.dierkens.ptcgl-tracker/settings.json`.
   Delete it to rerun first-run setup.
-- **Deck library:** `decks.sqlite` in the same app-data folder as settings. It
-  holds player-supplied decklists, immutable versions, and per-match snapshots;
-  it is never written into the log folder.
+- **Deck library:** `decks.sqlite` in the OS app-data folder. It holds
+  player-supplied decklists, immutable versions, and per-match snapshots; it is
+  never written into the log folder.
 
 See [ADR 0002](docs/adr/0002-log-folder-in-home-settings-in-app-config.md).
 
