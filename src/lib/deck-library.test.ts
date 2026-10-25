@@ -47,7 +47,7 @@ describe("analyzeDecklist", () => {
     if (!result.ok) expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it("accepts PTCGL's grouped section counts without warnings", () => {
+  it("keeps PTCGL's grouped section counts visible as warnings", () => {
     const ptcgl = DRAGAPULT.replace("Trainer: 4", "Trainer: 1").replace("Energy: 2", "Energy: 1");
     const result = preview(ptcgl);
 
@@ -56,10 +56,11 @@ describe("analyzeDecklist", () => {
       { count: 4, section: "trainer" },
       { count: 2, section: "energy" },
     ]);
-    expect(result.warnings).toEqual([]);
+    expect(result.warnings.join(" ")).toContain("trainer header declares 1, parsed 4");
+    expect(result.warnings.join(" ")).toContain("energy header declares 1, parsed 2");
   });
 
-  it("keeps a section warning when the header matches neither copies nor lines", () => {
+  it("keeps a genuinely wrong section header visible", () => {
     const result = preview(DRAGAPULT.replace("Trainer: 4", "Trainer: 2"));
 
     expect(result.warnings.join(" ")).toContain("trainer header declares 2, parsed 4");

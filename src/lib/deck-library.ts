@@ -1,8 +1,6 @@
 import {
   type ArchetypeSuggestion,
   deckId,
-  type DecklistWarning,
-  type DeckSection,
   deckView,
   fittingWindows,
   isErr,
@@ -50,10 +48,6 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
 
   const deck = normalized.value;
   const view = deckView(deck);
-  const sectionLines = new Map<DeckSection, number>();
-  for (const entry of parsed.value.entries) {
-    sectionLines.set(entry.section, (sectionLines.get(entry.section) ?? 0) + 1);
-  }
 
   return {
     ok: true,
@@ -64,9 +58,7 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
       formatCandidates: fittingWindows(deck).map((window) => window.label),
       sections: view.sections.map((section) => ({ count: section.count, section: section.section })),
       unresolved: deck.entries.filter((entry) => entry.card === null).length,
-      warnings: deck.warnings
-        .filter((warning) => !isPtcglGroupedHeader(warning, sectionLines))
-        .map((warning) => warning.message),
+      warnings: deck.warnings.map((warning) => warning.message),
     },
   };
 }
@@ -98,20 +90,3 @@ export function isFormatWindow(label: string): boolean {
   return !isErr(parseFormatLabel(label));
 }
 
-/**
- * Pokémon TCG Live's export headers count section lines (groups), not copies.
- * Suppress only that known quirk; a header that matches neither total nor line
- * count is still a real warning.
- */
-function isPtcglGroupedHeader(
-  warning: DecklistWarning,
-  sectionLines: ReadonlyMap<DeckSection, number>,
-): boolean {
-  if (warning.code !== "section-mismatch") return false;
-  const { declared, declaredSection } = warning.details;
-  return (
-    declaredSection !== undefined &&
-    declared !== undefined &&
-    sectionLines.get(declaredSection) === declared
-  );
-}
