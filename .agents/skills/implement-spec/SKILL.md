@@ -16,13 +16,34 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 **Implementer subagents** should be run in the background where possible for maximum concurrency.
 
+## Primary checkout invariant
+
+The primary checkout stays on `main`, clean, and fast-forwarded. Never implement
+or leave a feature branch checked out in the primary; every integration and
+implementer branch lives in its own worktree (default `.worktrees/`).
+
+When the work is merged or the stack is finished:
+
+```bash
+PRIMARY=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+git -C "$PRIMARY" fetch origin main --prune
+git -C "$PRIMARY" switch main
+git -C "$PRIMARY" merge --ff-only origin/main
+git worktree remove <worktree>
+git branch -d <branch>
+git -C "$PRIMARY" status -sb   # must not show [behind N]
+```
+
+If the primary is dirty, do not overwrite it. Move the uncommitted work to a
+named worktree/branch first (with the user), then sync the primary.
+
 ## Steps
 
 1. Read the spec and tickets to understand the task graph.
 
 2. (optional) Use an **exploration subagent** to conduct any exploration required by the tickets - relevant codebase files or external documentation. Ensure the exploration subagent can save files - it should save its markdown notes in a directory outside the repo, accessible by all future subagents. This lets **implementer subagents** focus on implementation rather than exploration.
 
-3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
+3. Create the integration branch in its own worktree, never in the primary. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
 
 4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
@@ -37,4 +58,4 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 8. If a draft PR exists, mark it ready for review. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 
-9. Clean up all **implementer subagent** worktrees.
+9. Clean up all **implementer subagent** and integration worktrees, delete merged branches, and sync the primary as described in the invariant above. Never finish with the primary on a feature branch or showing `[behind N]`.
