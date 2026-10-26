@@ -57,7 +57,7 @@ mod win {
     use std::time::Duration;
 
     use windows::core::HSTRING;
-    use windows::Win32::Foundation::{HGLOBAL, HWND};
+    use windows::Win32::Foundation::HGLOBAL;
     use windows::Win32::System::DataExchange::{
         CloseClipboard, GetClipboardData, GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
         RegisterClipboardFormatW,
@@ -181,7 +181,7 @@ mod win {
     fn open_with_retry() -> bool {
         for attempt in 0..OPEN_ATTEMPTS {
             // SAFETY: a null owner window is valid.
-            if unsafe { OpenClipboard(HWND::default()) }.is_ok() {
+            if unsafe { OpenClipboard(None) }.is_ok() {
                 return true;
             }
             if attempt + 1 < OPEN_ATTEMPTS {

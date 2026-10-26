@@ -357,7 +357,7 @@ impl WindowsOcrRecognizer {
             return Vec::new();
         };
         let engine = engine.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let Ok(results) = engine.RecognizeAsync(&bitmap).and_then(|op| op.get()) else {
+        let Ok(results) = engine.RecognizeAsync(&bitmap).and_then(|op| op.join()) else {
             return Vec::new();
         };
         let Ok(lines) = results.Lines() else {
