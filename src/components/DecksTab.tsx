@@ -29,7 +29,7 @@ import { useDecks } from "../lib/use-decks";
 import { ActiveDeckPicker } from "./ActiveDeckPicker";
 import { DeckForm } from "./DeckForm";
 
-/** The main-window deck library. The capture drawer gets the compact active-deck control. */
+/** The deck library; the main window and the capture drawer share this tab. */
 export function DecksTab() {
   const decks = useDecks();
   const [showForm, setShowForm] = useState(false);

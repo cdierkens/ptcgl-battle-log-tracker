@@ -15,17 +15,15 @@ interface ActiveDeckPickerProps {
   disabled?: boolean;
   error?: null | string;
   onChange: (id: null | string) => void;
-  variant?: "compact" | "full";
 }
 
-/** One active deck for the app; the drawer gets the compact form. */
+/** One active deck for the app; both windows share the Decks tab. */
 export function ActiveDeckPicker({
   activeDeck,
   decks,
   disabled = false,
   error = null,
   onChange,
-  variant = "full",
 }: ActiveDeckPickerProps) {
   const id = useId();
   const loading = decks === null && error === null;
@@ -34,7 +32,7 @@ export function ActiveDeckPicker({
   const summary = activeDeck === null ? null : deckSummary(activeDeck);
   const select = (
     <select
-      className={cn(SELECT_CLASS, variant === "compact" ? "h-8 flex-1 text-xs" : "h-10 w-full")}
+      className={cn(SELECT_CLASS, "h-10 w-full")}
       disabled={disabled || loading}
       id={id}
       onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
@@ -47,28 +45,6 @@ export function ActiveDeckPicker({
       <DeckOptions decks={choices} />
     </select>
   );
-
-  if (variant === "compact") {
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <label className="shrink-0 text-xs font-medium text-muted-foreground" htmlFor={id}>
-            Deck
-          </label>
-          {select}
-        </div>
-        {error !== null ? (
-          <p className="text-xs text-destructive">{error}</p>
-        ) : loading ? (
-          <p className="text-xs text-muted-foreground">Loading decks…</p>
-        ) : choices.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No decks yet. Add one in the main window.</p>
-        ) : summary !== null ? (
-          <p className="truncate text-xs text-muted-foreground">{summary}</p>
-        ) : null}
-      </div>
-    );
-  }
 
   return (
     <Field>

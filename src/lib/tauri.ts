@@ -141,7 +141,6 @@ export interface SyncStatus {
 export type TokenPrompt = "embedded" | "optional" | "required";
 
 export const DECKS_CHANGED_EVENT = "decks://changed";
-export const OPEN_DECKS_EVENT = "decks://open";
 export const OVERLAY_STATE_EVENT = "overlay://state";
 export const SETTINGS_CHANGED_EVENT = "settings://changed";
 export const SYNC_CHANGED_EVENT = "sync://changed";
@@ -160,7 +159,6 @@ export const getMatchDeck = (fileName: string) => invoke<MatchDeck | null>("get_
 export const assignMatchDeck = (fileName: string, deckId: string) =>
   invoke<MatchDeck>("assign_match_deck", { deckId, fileName });
 export const clearMatchDeck = (fileName: string) => invoke<void>("clear_match_deck", { fileName });
-export const openDecks = () => invoke<void>("open_decks");
 
 export const getCaptureState = () => invoke<string>("get_capture_state");
 export const submitBattleLog = (text: string) => invoke<SubmitOutcome>("submit_battle_log", { text });
