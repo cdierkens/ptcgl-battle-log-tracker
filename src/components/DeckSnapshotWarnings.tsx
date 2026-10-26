@@ -18,7 +18,8 @@ export function DeckSnapshotWarnings({
   decklistText: string;
   onEditDeck?: () => void;
 }) {
-  const analysis = useMemo(() => analyzeDecklist(decklistText), [decklistText]);
+  const hasDecklist = decklistText.trim() !== "";
+  const analysis = useMemo(() => (hasDecklist ? analyzeDecklist(decklistText) : null), [decklistText, hasDecklist]);
   const editAction =
     onEditDeck === undefined ? undefined : (
       <Button onClick={onEditDeck} size="sm" variant="outline">
@@ -26,6 +27,7 @@ export function DeckSnapshotWarnings({
       </Button>
     );
 
+  if (analysis === null) return null;
   if (!analysis.ok) {
     return (
       <StatusAlert actions={editAction} tone="info">

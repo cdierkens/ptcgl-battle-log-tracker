@@ -30,6 +30,7 @@ export function MatchDeckPanel({ decks, match, onChanged, onOpenDecks }: MatchDe
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
   const snapshot = match.deck;
+  const hasDecklist = snapshot !== null && snapshot.decklistText.trim() !== "";
 
   const startEditing = () => {
     const available = decks.decks;
@@ -110,15 +111,19 @@ export function MatchDeckPanel({ decks, match, onChanged, onOpenDecks }: MatchDe
       ) : null}
 
       {snapshot !== null ? (
-        <details className="mt-2 text-xs text-muted-foreground">
-          <summary className="cursor-pointer">Preview snapshot</summary>
-          <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-border p-2 font-mono">
-            {snapshot.decklistText}
-          </pre>
-        </details>
+        hasDecklist ? (
+          <details className="mt-2 text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Preview snapshot</summary>
+            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-border p-2 font-mono">
+              {snapshot.decklistText}
+            </pre>
+          </details>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">No decklist saved for this deck.</p>
+        )
       ) : null}
 
-      {snapshot !== null ? (
+      {snapshot !== null && hasDecklist ? (
         <Suspense fallback={null}>
           <DeckSnapshotWarnings
             catalogContextId={snapshot.catalogContextId}
