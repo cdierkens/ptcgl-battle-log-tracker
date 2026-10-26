@@ -28,6 +28,8 @@ export interface Deck {
   updatedAt: number;
 }
 
+export type DeckSource = "limitless" | "metadata" | "ptcgl" | "typed";
+
 export interface DeckVersion {
   archetype: ArchetypeRef | null;
   catalogContextId: null | string;
@@ -40,7 +42,7 @@ export interface DeckVersion {
   id: string;
   listIdHash: null | string;
   rawText: string;
-  source: string;
+  source: DeckSource;
 }
 
 /** One delivery of a saved log to a destination. Held deliveries read as pending. */
@@ -114,7 +116,7 @@ export interface SaveDeckInput {
   listIdHash: null | string;
   name: string;
   rawText: string;
-  source: string;
+  source: Exclude<DeckSource, "limitless">;
 }
 
 export interface Settings {

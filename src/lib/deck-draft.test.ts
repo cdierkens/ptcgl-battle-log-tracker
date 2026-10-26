@@ -83,6 +83,7 @@ describe("draftFromDeck", () => {
       },
     };
     expect(draftFromDeck(syntheticDeck).archetypeId).toBeNull();
+    expect(draftFromDeck(syntheticDeck).labelEdited).toBe(true);
   });
 });
 
@@ -133,6 +134,16 @@ describe("archetype draft transitions", () => {
     expect(applyArchetypeSelection(BLANK_DECK_DRAFT, "missing", [])).toBe(BLANK_DECK_DRAFT);
   });
 
+  it("resets catalog state when a catalog entry is selected again", () => {
+    const custom = setArchetypeLabel(applyCatalogArchetype(BLANK_DECK_DRAFT, DRAGAPULT), "My Dragapult");
+    const selected = applyCatalogArchetype(custom, DRAGAPULT);
+    expect(selected.archetypeId).toBe(DRAGAPULT.id);
+    expect(selected.archetypeLabel).toBe(DRAGAPULT.label);
+    expect(selected.archetypeSpecies).toEqual(speciesSlots(DRAGAPULT.cards));
+    expect(selected.formatLabel).toBe(DRAGAPULT.window);
+    expect(selected.labelEdited).toBe(false);
+  });
+
   it("clears the other slot when the same species is chosen", () => {
     const first = setArchetypeSlot(BLANK_DECK_DRAFT, 0, "Dragapult");
     const duplicate = setArchetypeSlot(first, 1, "Dragapult");
@@ -175,6 +186,11 @@ describe("archetype draft transitions", () => {
 
   it("returns null for an empty archetype", () => {
     expect(archetypeFromDraft(BLANK_DECK_DRAFT)).toBeNull();
+  });
+
+  it("allows a label-only archetype", () => {
+    const draft = { ...BLANK_DECK_DRAFT, archetypeLabel: "Custom" };
+    expect(archetypeFromDraft(draft)).toEqual({ cards: [], id: null, label: "Custom" });
   });
 
   it("returns null when a species is not in the catalog", () => {

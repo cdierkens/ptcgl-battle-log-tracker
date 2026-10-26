@@ -130,7 +130,7 @@ export function DecksTab() {
           editing={editing}
           errors={errors}
           onCancel={reset}
-          onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+          onChange={setDraft}
           onSave={() => void save()}
           saving={decks.saving}
           showErrors={showErrors}

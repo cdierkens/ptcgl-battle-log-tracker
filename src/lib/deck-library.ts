@@ -15,6 +15,8 @@ import {
 } from "@dierkens.dev/ptcg-decklist-tools";
 import { archetypes, catalog } from "@dierkens.dev/ptcg-decklist-tools/data";
 
+import type { DeckSource } from "./tauri";
+
 import { isBlank } from "./decklist-text";
 
 export interface CatalogSpecies {
@@ -49,7 +51,16 @@ export type DeckPreviewResult =
   | { errors: string[]; ok: false; }
   | { ok: true; preview: DeckPreview };
 
-export type DetectedDeckSource = "metadata" | "ptcgl" | "typed";
+export type DetectedDeckSource = Exclude<DeckSource, "limitless">;
+
+export interface ResolvedArchetypeSlots {
+  /** De-duplicated species slugs. */
+  cards: string[];
+  /** True when the slots repeat a species. */
+  duplicate: boolean;
+  labels: string[];
+  unknown: boolean;
+}
 
 const CATALOG = catalog;
 
@@ -112,6 +123,11 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
   };
 }
 
+/** Empty snapshots skip the parser entirely; there is nothing to re-check. */
+export function analyzeDecklistSnapshot(text: string): DeckPreviewResult | null {
+  return isBlank(text) ? null : analyzeDecklist(text);
+}
+
 /**
  * Provenance only; parsing accepts any of these shapes. Section headers plus a
  * Total Cards line identify a PTCGL/Limitless export; anything else is typed.
@@ -125,11 +141,7 @@ export function deckSource(text: string): DetectedDeckSource {
 }
 
 export function deriveArchetypeLabel(values: readonly string[]): string {
-  const labels = values
-    .map((value) => value.trim())
-    .filter((value) => value !== "")
-    .map((value) => findSpecies(value)?.label ?? value);
-  return [...new Set(labels)].join(" / ");
+  return [...new Set(resolveArchetypeSlots(values).labels)].join(" / ");
 }
 
 export function findArchetype(id: string): CatalogArchetype | undefined {
@@ -156,6 +168,19 @@ export async function identityOf(deck: NormalizedDeck): Promise<DeckIdentity> {
 /** True when the label resolves as a set window; false means an opaque confirmed label. */
 export function isFormatWindow(label: string): boolean {
   return !isErr(parseFormatLabel(label));
+}
+
+export function resolveArchetypeSlots(values: readonly string[]): ResolvedArchetypeSlots {
+  const trimmed = values.map((value) => value.trim()).filter((value) => value !== "");
+  const found = trimmed.map((value) => findSpecies(value));
+  const resolved = found.filter((species): species is CatalogSpecies => species !== undefined);
+  const cards = [...new Set(resolved.map((species) => species.slug))];
+  return {
+    cards,
+    duplicate: cards.length !== resolved.length,
+    labels: trimmed.map((value, index) => found[index]?.label ?? value),
+    unknown: found.some((species) => species === undefined),
+  };
 }
 
 export function speciesLabelFor(slug: string): string {

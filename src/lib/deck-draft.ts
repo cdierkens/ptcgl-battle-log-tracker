@@ -1,9 +1,15 @@
 import type { ArchetypeSuggestion, CatalogArchetype } from "@dierkens.dev/ptcg-decklist-tools";
 
-import type { CatalogSpecies, DeckDraftAnalysis } from "./deck-library";
+import type { DeckDraftAnalysis } from "./deck-library";
 import type { ArchetypeRef, Deck } from "./tauri";
 
-import { deriveArchetypeLabel, findArchetype, findSpecies, speciesSlots } from "./deck-library";
+import {
+  deriveArchetypeLabel,
+  findArchetype,
+  findSpecies,
+  resolveArchetypeSlots,
+  speciesSlots,
+} from "./deck-library";
 
 export interface DeckDraft {
   archetypeId: null | string;
@@ -66,15 +72,8 @@ export function applySuggestedArchetype(draft: DeckDraft, suggestion: ArchetypeS
 }
 
 export function archetypeFromDraft(draft: DeckDraft): ArchetypeRef | null {
-  const resolved = draft.archetypeSpecies.map((value) => (value.trim() === "" ? null : findSpecies(value)));
-  if (resolved.some((species) => species === undefined)) return null;
-  const cards = [
-    ...new Set(
-      resolved
-        .filter((species): species is CatalogSpecies => species !== null && species !== undefined)
-        .map((species) => species.slug),
-    ),
-  ];
+  const { cards, unknown } = resolveArchetypeSlots(draft.archetypeSpecies);
+  if (unknown) return null;
   const label = draft.archetypeLabel.trim();
   if (cards.length === 0 && label === "") return null;
   return { cards, id: draft.archetypeId, label };
@@ -91,22 +90,12 @@ export function clearArchetype(draft: DeckDraft): DeckDraft {
 }
 
 export function deckDraftErrors(analysis: DeckDraftAnalysis, draft: DeckDraft): DeckDraftErrors {
-  let archetype: null | string = null;
-  const seen = new Set<string>();
-  for (const value of draft.archetypeSpecies) {
-    const trimmed = value.trim();
-    if (trimmed === "") continue;
-    const species = findSpecies(trimmed);
-    if (species === undefined) {
-      archetype = "Choose a Pokémon from the list.";
-      break;
-    }
-    if (seen.has(species.slug)) {
-      archetype = "Choose two different Pokémon.";
-      break;
-    }
-    seen.add(species.slug);
-  }
+  const { duplicate, unknown } = resolveArchetypeSlots(draft.archetypeSpecies);
+  let archetype: null | string = unknown
+    ? "Choose a Pokémon from the list."
+    : duplicate
+      ? "Choose two different Pokémon."
+      : null;
   if (
     archetype === null &&
     draft.archetypeLabel.trim() === "" &&
@@ -139,7 +128,7 @@ export function draftFromDeck(deck: Deck): DeckDraft {
     archetypeLabel: archetype?.label ?? "",
     archetypeSpecies: speciesSlots(archetype?.cards ?? []),
     formatLabel: version.formatLabel ?? "",
-    labelEdited: archetype !== null && archetype.id === null,
+    labelEdited: archetype !== null && archetypeId === null,
     name: deck.name,
     text: version.rawText,
   };

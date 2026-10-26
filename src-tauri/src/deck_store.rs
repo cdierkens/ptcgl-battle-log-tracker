@@ -127,10 +127,11 @@ fn validate_archetype(archetype: &ArchetypeRef) -> Result<(), DeckStoreError> {
     }
     let mut seen = HashSet::new();
     for card in &archetype.cards {
-        if card.trim().is_empty() {
+        let trimmed = card.trim();
+        if trimmed.is_empty() {
             return Err(DeckStoreError::Invalid("archetype Pokémon cannot be empty".into()));
         }
-        if !seen.insert(card.as_str()) {
+        if !seen.insert(trimmed) {
             return Err(DeckStoreError::Invalid("archetype Pokémon must be unique".into()));
         }
     }
@@ -446,9 +447,14 @@ impl DeckStore {
         if let Some(archetype) = &input.archetype {
             validate_archetype(archetype)?;
         }
+        let archetype = input.archetype.as_ref().map(|archetype| ArchetypeRef {
+            cards: archetype.cards.iter().map(|card| card.trim().to_owned()).collect(),
+            id: archetype.id.clone(),
+            label: archetype.label.trim().to_owned(),
+        });
         let raw_text = if has_list { input.raw_text } else { String::new() };
         let decklist_text = if has_list { input.decklist_text } else { String::new() };
-        let archetype_json = input.archetype.as_ref().map(serde_json::to_string).transpose()?;
+        let archetype_json = archetype.as_ref().map(serde_json::to_string).transpose()?;
         let now = now_ms();
         let version_id = new_id("ver");
         let existing = input.id.clone();
@@ -815,6 +821,21 @@ mod tests {
         assert_eq!(snapshot.deck_id_hash, None);
         assert_eq!(snapshot.list_id_hash, None);
         assert_eq!(snapshot.format_label.as_deref(), Some("TEF-30C"));
+    }
+
+    #[test]
+    fn trims_archetype_metadata_before_storing() {
+        let mut temp = TempStore::new("archetype-trim");
+        let deck = temp
+            .store
+            .save(SaveDeckInput {
+                archetype: Some(ArchetypeRef { cards: vec![" dragapult ".into()], id: None, label: " Custom ".into() }),
+                ..input(None, "x")
+            })
+            .unwrap();
+        let stored = deck.current_version.archetype.unwrap();
+        assert_eq!(stored.label, "Custom");
+        assert_eq!(stored.cards, vec!["dragapult"]);
     }
 
     #[test]
