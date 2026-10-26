@@ -1,5 +1,6 @@
 import {
   type ArchetypeSuggestion,
+  type CatalogArchetype,
   deckId,
   deckView,
   fittingWindows,
@@ -12,7 +13,17 @@ import {
   renderDecklist,
   suggestArchetype,
 } from "@dierkens.dev/ptcg-decklist-tools";
-import { catalog } from "@dierkens.dev/ptcg-decklist-tools/data";
+import { archetypes, catalog } from "@dierkens.dev/ptcg-decklist-tools/data";
+
+export interface CatalogSpecies {
+  label: string;
+  slug: string;
+}
+
+export type DeckDraftAnalysis =
+  | { errors: string[]; kind: "invalid" }
+  | { kind: "empty" }
+  | { kind: "valid"; preview: DeckPreview };
 
 export interface DeckIdentity {
   catalogContextId: null | string;
@@ -36,14 +47,43 @@ export type DeckPreviewResult =
   | { errors: string[]; ok: false; }
   | { ok: true; preview: DeckPreview };
 
-export type DeckDraftAnalysis =
-  | { kind: "empty" }
-  | { errors: string[]; kind: "invalid" }
-  | { kind: "valid"; preview: DeckPreview };
-
 export type DetectedDeckSource = "metadata" | "ptcgl" | "typed";
 
 const CATALOG = catalog;
+
+const titleCase = (value: string) =>
+  value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
+
+function speciesLabel(slug: string): string {
+  const parts = slug.split("-").filter((part) => part !== "");
+  const mega = parts.indexOf("mega");
+  if (mega >= 0) {
+    return ["mega", ...parts.slice(0, mega), ...parts.slice(mega + 1)].map(titleCase).join(" ");
+  }
+  return parts.map(titleCase).join(" ");
+}
+
+const SPECIES_BY_SLUG = new Map<string, CatalogSpecies>();
+for (const card of CATALOG.cards) {
+  if (card.species === null || SPECIES_BY_SLUG.has(card.species)) continue;
+  SPECIES_BY_SLUG.set(card.species, { label: speciesLabel(card.species), slug: card.species });
+}
+
+export const SPECIES: readonly CatalogSpecies[] = [...SPECIES_BY_SLUG.values()].sort((left, right) =>
+  left.label.localeCompare(right.label),
+);
+
+const SPECIES_BY_LABEL = new Map(SPECIES.map((species) => [species.label.toLowerCase(), species]));
+
+export const ARCHETYPES: readonly CatalogArchetype[] = archetypes;
+export const FORMAT_WINDOWS: readonly string[] = [...new Set(archetypes.map((archetype) => archetype.window))].sort();
+
+/** Wrap the parser for the form: blank is a valid no-list state, not an error. */
+export function analyzeDeckDraft(text: string): DeckDraftAnalysis {
+  if (text.trim() === "") return { kind: "empty" };
+  const result = analyzeDecklist(text);
+  return result.ok ? { kind: "valid", preview: result.preview } : { errors: result.errors, kind: "invalid" };
+}
 
 /** Parse, normalise, render, and read the projections the deck editor needs. Never throws. */
 export function analyzeDecklist(text: string): DeckPreviewResult {
@@ -70,13 +110,6 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
   };
 }
 
-/** Wrap the parser for the form: blank is a valid no-list state, not an error. */
-export function analyzeDeckDraft(text: string): DeckDraftAnalysis {
-  if (text.trim() === "") return { kind: "empty" };
-  const result = analyzeDecklist(text);
-  return result.ok ? { kind: "valid", preview: result.preview } : { errors: result.errors, kind: "invalid" };
-}
-
 /**
  * Provenance only; parsing accepts any of these shapes. Section headers plus a
  * Total Cards line identify a PTCGL/Limitless export; anything else is typed.
@@ -87,6 +120,19 @@ export function deckSource(text: string): DetectedDeckSource {
   const sections = /^\s*(Pokémon|Pokemon|Trainer|Energy)\s*:\s*\d+/m.test(text);
   const total = /^\s*Total Cards\s*:\s*\d+/im.test(text);
   return sections && total ? "ptcgl" : "typed";
+}
+
+export function deriveArchetypeLabel(values: readonly string[]): string {
+  const labels = values
+    .map((value) => value.trim())
+    .filter((value) => value !== "")
+    .map((value) => findSpecies(value)?.label ?? value);
+  return [...new Set(labels)].join(" / ");
+}
+
+export function findSpecies(value: string): CatalogSpecies | undefined {
+  const key = value.trim().toLowerCase();
+  return SPECIES_BY_SLUG.get(key) ?? SPECIES_BY_LABEL.get(key);
 }
 
 /** The two hashes and the versions needed to compare them later. */
@@ -104,5 +150,9 @@ export async function identityOf(deck: NormalizedDeck): Promise<DeckIdentity> {
 /** True when the label resolves as a set window; false means an opaque confirmed label. */
 export function isFormatWindow(label: string): boolean {
   return !isErr(parseFormatLabel(label));
+}
+
+export function speciesLabelFor(slug: string): string {
+  return SPECIES_BY_SLUG.get(slug)?.label ?? speciesLabel(slug);
 }
 

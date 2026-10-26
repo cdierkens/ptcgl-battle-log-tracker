@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeDeckDraft, analyzeDecklist, deckSource, identityOf, isFormatWindow } from "./deck-library";
+import {
+  analyzeDeckDraft,
+  analyzeDecklist,
+  deckSource,
+  deriveArchetypeLabel,
+  findSpecies,
+  FORMAT_WINDOWS,
+  identityOf,
+  isFormatWindow,
+  SPECIES,
+  speciesLabelFor,
+} from "./deck-library";
 
 const DRAGAPULT = `Pokémon: 1
 1 Dragapult ex TWM 130
@@ -112,5 +123,29 @@ describe("deckSource", () => {
 
   it("marks blank text as metadata", () => {
     expect(deckSource("  \n")).toBe("metadata");
+  });
+});
+
+describe("species catalog", () => {
+  it("exposes unique labels and slugs", () => {
+    expect(SPECIES.length).toBeGreaterThan(0);
+    expect(new Set(SPECIES.map((species) => species.slug)).size).toBe(SPECIES.length);
+    expect(new Set(SPECIES.map((species) => species.label)).size).toBe(SPECIES.length);
+  });
+
+  it("round-trips labels and slugs", () => {
+    expect(findSpecies("Dragapult")?.slug).toBe("dragapult");
+    expect(findSpecies("dragapult")?.label).toBe("Dragapult");
+    expect(speciesLabelFor("excadrill-mega")).toBe("Mega Excadrill");
+  });
+
+  it("derives a label from names", () => {
+    expect(deriveArchetypeLabel(["Dragapult", "Blaziken"])).toBe("Dragapult / Blaziken");
+    expect(deriveArchetypeLabel(["Dragapult", "Dragapult"])).toBe("Dragapult");
+    expect(deriveArchetypeLabel([])).toBe("");
+  });
+
+  it("exposes the catalog windows", () => {
+    expect(FORMAT_WINDOWS).toContain("TEF-30C");
   });
 });
