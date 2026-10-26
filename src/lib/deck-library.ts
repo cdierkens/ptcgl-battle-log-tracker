@@ -54,7 +54,9 @@ export type DeckPreviewResult =
 export type DetectedDeckSource = Exclude<DeckSource, "limitless">;
 
 export interface ResolvedArchetypeSlots {
+  /** De-duplicated species slugs. */
   cards: string[];
+  /** True when the slots repeat a species. */
   duplicate: boolean;
   labels: string[];
   unknown: boolean;

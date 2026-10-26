@@ -59,7 +59,7 @@ export function ArchetypeFields({ draft, errors, onChange, showErrors, suggestio
 
   return (
     <>
-      <Field>
+      <Field data-invalid={archetypeInvalid || undefined}>
         <FieldLabel htmlFor="deck-archetype">Archetype</FieldLabel>
         <select
           className={cn(SELECT_CLASS, "h-10 w-full")}
@@ -94,7 +94,7 @@ export function ArchetypeFields({ draft, errors, onChange, showErrors, suggestio
         </FieldDescription>
       </Field>
 
-      <Field>
+      <Field data-invalid={archetypeInvalid || undefined}>
         <FieldLabel htmlFor="deck-archetype-label">Archetype label</FieldLabel>
         <Input
           aria-describedby={describedBy}
@@ -109,7 +109,7 @@ export function ArchetypeFields({ draft, errors, onChange, showErrors, suggestio
 
       <div className="grid grid-cols-2 gap-2">
         {[0, 1].map((index) => (
-          <Field key={index}>
+          <Field data-invalid={archetypeInvalid || undefined} key={index}>
             <FieldLabel htmlFor={`deck-species-${index}`}>Pokémon {index + 1}</FieldLabel>
             <Input
               aria-describedby={describedBy}

@@ -116,7 +116,7 @@ export interface SaveDeckInput {
   listIdHash: null | string;
   name: string;
   rawText: string;
-  source: DeckSource;
+  source: Exclude<DeckSource, "limitless">;
 }
 
 export interface Settings {

@@ -13,6 +13,10 @@ import type { Deck } from "../lib/tauri";
 
 import { FORMAT_WINDOWS, isFormatWindow } from "../lib/deck-library";
 
+const DECKLIST_ERROR_ID = "decklist-error";
+const FORMAT_ERROR_ID = "deck-format-error";
+const NAME_ERROR_ID = "deck-name-error";
+
 interface DeckFormProps {
   analysis: DeckDraftAnalysis;
   draft: DeckDraft;
@@ -57,17 +61,21 @@ export function DeckForm({
       <Field data-invalid={(showErrors && errors.name !== null) || undefined}>
         <FieldLabel htmlFor="deck-name">Name</FieldLabel>
         <Input
+          aria-describedby={showErrors && errors.name !== null ? NAME_ERROR_ID : undefined}
+          aria-invalid={(showErrors && errors.name !== null) || undefined}
           id="deck-name"
           onChange={(event) => onChange({ ...draft, name: event.target.value })}
           placeholder="League deck"
           value={draft.name}
         />
-        <FieldError>{showErrors ? errors.name : null}</FieldError>
+        <FieldError id={NAME_ERROR_ID}>{showErrors ? errors.name : null}</FieldError>
       </Field>
 
       <Field data-invalid={(showErrors && errors.decklist !== null) || undefined}>
         <FieldLabel htmlFor="decklist">Decklist</FieldLabel>
         <Textarea
+          aria-describedby={showErrors && errors.decklist !== null ? DECKLIST_ERROR_ID : undefined}
+          aria-invalid={(showErrors && errors.decklist !== null) || undefined}
           className="min-h-40 font-mono text-xs"
           id="decklist"
           onChange={(event) => onChange({ ...draft, text: event.target.value })}
@@ -77,7 +85,7 @@ export function DeckForm({
         <FieldDescription>
           Optional. Parsed locally. The original text and a portable PTCGL render are stored when present.
         </FieldDescription>
-        <FieldError>{showErrors ? errors.decklist : null}</FieldError>
+        <FieldError id={DECKLIST_ERROR_ID}>{showErrors ? errors.decklist : null}</FieldError>
       </Field>
 
       {preview !== null ? (
@@ -97,6 +105,8 @@ export function DeckForm({
       <Field data-invalid={(showErrors && errors.format !== null) || undefined}>
         <FieldLabel htmlFor="deck-format">Format</FieldLabel>
         <Input
+          aria-describedby={showErrors && errors.format !== null ? FORMAT_ERROR_ID : undefined}
+          aria-invalid={(showErrors && errors.format !== null) || undefined}
           id="deck-format"
           list="deck-format-candidates"
           onChange={(event) => onChange({ ...draft, formatLabel: event.target.value })}
@@ -107,7 +117,7 @@ export function DeckForm({
           {formatCandidates.map((candidate) => <option key={candidate} value={candidate} />)}
         </datalist>
         <FieldDescription>{formatDescription}</FieldDescription>
-        <FieldError>{showErrors ? errors.format : null}</FieldError>
+        <FieldError id={FORMAT_ERROR_ID}>{showErrors ? errors.format : null}</FieldError>
       </Field>
 
       <ArchetypeFields
