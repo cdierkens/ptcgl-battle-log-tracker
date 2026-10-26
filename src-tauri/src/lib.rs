@@ -37,7 +37,8 @@ pub fn run() {
     use crate::platform::permission::ScreenRecordingAccess;
     use crate::platform::secret_store::FileSecretStore;
     use crate::platform::store::FsLogStore;
-    use crate::ports::{OverlayPresenter, ScreenCaptureAccess, SecretStore};
+    use crate::platform::window::XcapWindowProvider;
+    use crate::ports::{OverlayPresenter, ScreenCaptureAccess, SecretStore, WindowProvider};
     use crate::settings::{SettingsPaths, SharedSettings};
     use crate::sink::{DeckAssociatingSink, LogSink, StoreLogSink, SyncingLogSink};
 
@@ -135,7 +136,12 @@ pub fn run() {
             // Now that every command can find its state, build the windows.
             let presenter: Arc<dyn OverlayPresenter> = Arc::new(TauriOverlayPresenter::new(app.handle())?);
             app.manage(presenter.clone());
-            if first_run || !ScreenRecordingAccess.is_authorized() {
+            let screen_authorized = ScreenRecordingAccess.is_authorized();
+            // Only probe for the game when a title lookup can succeed; without screen
+            // recording the window list has no titles, and the window shows anyway.
+            let game_present = screen_authorized
+                && XcapWindowProvider::new(crate::title::GAME_TITLE_HINT).find_game_window().is_some();
+            if should_show_main(first_run, screen_authorized, game_present) {
                 show_main(app.handle());
             }
             spawn_sync_worker(app.handle(), queue, shared.clone(), deck_store, secrets, results_up(state_cell.clone()));
@@ -214,11 +220,43 @@ fn open_queue(app: &tauri::AppHandle) -> Result<delivery_queue::DeliveryQueue, d
     })
 }
 
+/// The standalone window belongs on screen whenever there is no game to attach to.
+/// A launch while the game is running stays in the background: the capture drawer is
+/// the only surface that matters then, and a window would sit over the game.
+fn should_show_main(first_run: bool, screen_authorized: bool, game_present: bool) -> bool {
+    first_run || !screen_authorized || !game_present
+}
+
 pub(crate) fn show_main(app: &tauri::AppHandle) {
     use tauri::Manager;
 
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.show();
         let _ = main.set_focus();
+    }
+}
+
+#[cfg(test)]
+mod launch_tests {
+    use super::should_show_main;
+
+    #[test]
+    fn first_run_shows_the_window() {
+        assert!(should_show_main(true, true, true));
+    }
+
+    #[test]
+    fn missing_screen_recording_shows_the_window() {
+        assert!(should_show_main(false, false, true));
+    }
+
+    #[test]
+    fn no_game_window_shows_the_window() {
+        assert!(should_show_main(false, true, false));
+    }
+
+    #[test]
+    fn a_running_game_with_permission_stays_in_the_background() {
+        assert!(!should_show_main(false, true, true));
     }
 }
