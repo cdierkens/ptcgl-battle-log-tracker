@@ -105,6 +105,27 @@ The PTCGL-rendered text of a deck snapshot or deck version. Destinations receive
 original pasted text stays local.
 _Avoid_: export, list text, deck string
 
+**Archetype**:
+A player-confirmed label plus zero to two Pokémon species. The label is what people
+read; the species are the identities Training Court renders. Catalog archetypes carry
+a stable id; custom ones do not.
+_Avoid_: deck type, deck name
+
+**Custom archetype**:
+An archetype whose label or Pokémon were edited away from a catalog entry. It has no
+catalog id.
+_Avoid_: manual archetype, user archetype
+
+**Metadata-only deck**:
+A deck version with no decklist, identified by a format and optionally an archetype.
+Used when the player wants match identity before pasting a list.
+_Avoid_: empty deck, listless deck, header-only deck
+
+**Deck source**:
+How a deck version was supplied: a paste, a typed list, or metadata only. It is
+provenance, not something parsing depends on.
+_Avoid_: origin, input mode
+
 ### Platform
 
 **Platform port**:
