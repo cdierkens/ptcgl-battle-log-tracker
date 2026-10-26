@@ -67,13 +67,9 @@ export function DecksTab() {
     const draftToSave = deriveArchetypeLabelIfNeeded(draft);
     if (draftToSave !== draft) setDraft(draftToSave);
     setShowErrors(true);
+    setFormError(null);
     const currentErrors = deckDraftErrors(analysis, draftToSave);
-    const firstError =
-      currentErrors.name ?? currentErrors.decklist ?? currentErrors.format ?? currentErrors.archetype;
-    if (firstError !== null) {
-      setFormError(firstError);
-      return;
-    }
+    if (Object.values(currentErrors).some((error) => error !== null)) return;
 
     try {
       const preview = analysis.kind === "valid" ? analysis.preview : null;

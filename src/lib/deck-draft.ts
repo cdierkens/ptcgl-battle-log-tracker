@@ -3,7 +3,7 @@ import type { ArchetypeSuggestion, CatalogArchetype } from "@dierkens.dev/ptcg-d
 import type { CatalogSpecies, DeckDraftAnalysis } from "./deck-library";
 import type { ArchetypeRef, Deck } from "./tauri";
 
-import { ARCHETYPES, deriveArchetypeLabel, findSpecies, speciesSlots } from "./deck-library";
+import { deriveArchetypeLabel, findArchetype, findSpecies, speciesSlots } from "./deck-library";
 
 export interface DeckDraft {
   archetypeId: null | string;
@@ -32,6 +32,17 @@ export const BLANK_DECK_DRAFT: DeckDraft = {
   text: "",
 };
 
+export function applyArchetypeSelection(
+  draft: DeckDraft,
+  id: string,
+  suggestions: readonly ArchetypeSuggestion[],
+): DeckDraft {
+  const catalog = findArchetype(id);
+  if (catalog !== undefined) return applyCatalogArchetype(draft, catalog);
+  const suggestion = suggestions.find((candidate) => candidate.id === id);
+  return suggestion === undefined ? draft : applySuggestedArchetype(draft, suggestion);
+}
+
 export function applyCatalogArchetype(draft: DeckDraft, archetype: CatalogArchetype): DeckDraft {
   return {
     ...draft,
@@ -43,6 +54,7 @@ export function applyCatalogArchetype(draft: DeckDraft, archetype: CatalogArchet
   };
 }
 
+/** Only for synthetic suggestions; catalog ids are resolved first. */
 export function applySuggestedArchetype(draft: DeckDraft, suggestion: ArchetypeSuggestion): DeckDraft {
   return {
     ...draft,
@@ -121,7 +133,7 @@ export function draftFromDeck(deck: Deck): DeckDraft {
   const version = deck.currentVersion;
   const archetype = version.archetype;
   const storedId = archetype?.id ?? null;
-  const archetypeId = storedId !== null && ARCHETYPES.some((entry) => entry.id === storedId) ? storedId : null;
+  const archetypeId = storedId !== null && findArchetype(storedId) !== undefined ? storedId : null;
   return {
     archetypeId,
     archetypeLabel: archetype?.label ?? "",

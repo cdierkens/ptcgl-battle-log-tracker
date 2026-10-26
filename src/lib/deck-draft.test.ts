@@ -1,9 +1,12 @@
+import type { ArchetypeSuggestion } from "@dierkens.dev/ptcg-decklist-tools";
+
 import { describe, expect, it } from "vitest";
 
 import type { DeckDraftAnalysis } from "./deck-library";
 import type { Deck } from "./tauri";
 
 import {
+  applyArchetypeSelection,
   applyCatalogArchetype,
   archetypeFromDraft,
   BLANK_DECK_DRAFT,
@@ -18,6 +21,16 @@ import { ARCHETYPES, speciesSlots } from "./deck-library";
 
 const DRAGAPULT = ARCHETYPES.find((archetype) => archetype.label === "Dragapult ex");
 if (DRAGAPULT === undefined) throw new Error("catalog is missing Dragapult ex");
+
+const catalogSuggestion: ArchetypeSuggestion = {
+  basis: "alias",
+  cards: DRAGAPULT.cards,
+  confidence: 0.9,
+  evidence: { competitors: [], kind: "alias", matched: [], specificity: 1, windows: [DRAGAPULT.window] },
+  id: DRAGAPULT.id,
+  label: DRAGAPULT.label,
+  reasons: [],
+};
 
 const deck: Deck = {
   archivedAt: null,
@@ -89,6 +102,35 @@ describe("archetype draft transitions", () => {
     expect(edited.archetypeId).toBeNull();
     expect(edited.archetypeSpecies).toEqual(["Dragapult", "Dusknoir"]);
     expect(edited.archetypeLabel).toBe("Dragapult / Dusknoir");
+  });
+
+  it("keeps catalog identity when a suggestion is a catalog entry", () => {
+    const selected = applyArchetypeSelection(BLANK_DECK_DRAFT, catalogSuggestion.id, [catalogSuggestion]);
+    expect(selected.archetypeId).toBe(DRAGAPULT.id);
+    expect(selected.formatLabel).toBe(DRAGAPULT.window);
+    expect(selected.archetypeSpecies).toEqual(speciesSlots(DRAGAPULT.cards));
+  });
+
+  it("treats a synthetic suggestion as custom and keeps the format", () => {
+    const synthetic: ArchetypeSuggestion = {
+      ...catalogSuggestion,
+      cards: ["dragapult"],
+      id: "line:1",
+      label: "Synthetic line",
+    };
+    const selected = applyArchetypeSelection(
+      { ...BLANK_DECK_DRAFT, formatLabel: "SVI-ASC" },
+      synthetic.id,
+      [synthetic],
+    );
+    expect(selected.archetypeId).toBeNull();
+    expect(selected.formatLabel).toBe("SVI-ASC");
+    expect(selected.archetypeLabel).toBe("Synthetic line");
+    expect(selected.archetypeSpecies).toEqual(["Dragapult", ""]);
+  });
+
+  it("ignores an unknown selection", () => {
+    expect(applyArchetypeSelection(BLANK_DECK_DRAFT, "missing", [])).toBe(BLANK_DECK_DRAFT);
   });
 
   it("clears the other slot when the same species is chosen", () => {

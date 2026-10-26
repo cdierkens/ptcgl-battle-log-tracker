@@ -12,14 +12,13 @@ import type { DeckDraftAnalysis, DeckPreview } from "../lib/deck-library";
 import type { Deck } from "../lib/tauri";
 
 import {
-  applyCatalogArchetype,
-  applySuggestedArchetype,
+  applyArchetypeSelection,
   clearArchetype,
   deriveArchetypeLabelIfNeeded,
   setArchetypeLabel,
   setArchetypeSlot,
 } from "../lib/deck-draft";
-import { ARCHETYPES, FORMAT_WINDOWS, isFormatWindow, SPECIES } from "../lib/deck-library";
+import { ARCHETYPES, findArchetype, FORMAT_WINDOWS, isFormatWindow, SPECIES } from "../lib/deck-library";
 import { SELECT_CLASS } from "../lib/form-styles";
 
 const CUSTOM_ARCHETYPE = "__custom__";
@@ -55,7 +54,7 @@ export function DeckForm({
     draft.archetypeLabel.trim() !== "" ||
     draft.archetypeSpecies.some((value) => value.trim() !== "");
   const selectedCatalogId =
-    draft.archetypeId !== null && ARCHETYPES.some((archetype) => archetype.id === draft.archetypeId)
+    draft.archetypeId !== null && findArchetype(draft.archetypeId) !== undefined
       ? draft.archetypeId
       : hasArchetype
         ? CUSTOM_ARCHETYPE
@@ -81,13 +80,7 @@ export function DeckForm({
       return;
     }
     if (value === CUSTOM_ARCHETYPE) return;
-    const catalog = ARCHETYPES.find((archetype) => archetype.id === value);
-    if (catalog !== undefined) {
-      onChange(applyCatalogArchetype(draft, catalog));
-      return;
-    }
-    const suggestion = suggestions.find((candidate) => candidate.id === value);
-    if (suggestion !== undefined) onChange(applySuggestedArchetype(draft, suggestion));
+    onChange(applyArchetypeSelection(draft, value, suggestions));
   };
 
   return (

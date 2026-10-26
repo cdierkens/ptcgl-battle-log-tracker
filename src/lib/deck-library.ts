@@ -15,6 +15,8 @@ import {
 } from "@dierkens.dev/ptcg-decklist-tools";
 import { archetypes, catalog } from "@dierkens.dev/ptcg-decklist-tools/data";
 
+import { isBlank } from "./decklist-text";
+
 export interface CatalogSpecies {
   label: string;
   slug: string;
@@ -80,7 +82,7 @@ export const FORMAT_WINDOWS: readonly string[] = [...new Set(archetypes.map((arc
 
 /** Wrap the parser for the form: blank is a valid no-list state, not an error. */
 export function analyzeDeckDraft(text: string): DeckDraftAnalysis {
-  if (text.trim() === "") return { kind: "empty" };
+  if (isBlank(text)) return { kind: "empty" };
   const result = analyzeDecklist(text);
   return result.ok ? { kind: "valid", preview: result.preview } : { errors: result.errors, kind: "invalid" };
 }
@@ -116,7 +118,7 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
  * Blank text means the deck has no list, not that it was typed.
  */
 export function deckSource(text: string): DetectedDeckSource {
-  if (text.trim() === "") return "metadata";
+  if (isBlank(text)) return "metadata";
   const sections = /^\s*(Pokémon|Pokemon|Trainer|Energy)\s*:\s*\d+/m.test(text);
   const total = /^\s*Total Cards\s*:\s*\d+/im.test(text);
   return sections && total ? "ptcgl" : "typed";
@@ -128,6 +130,10 @@ export function deriveArchetypeLabel(values: readonly string[]): string {
     .filter((value) => value !== "")
     .map((value) => findSpecies(value)?.label ?? value);
   return [...new Set(labels)].join(" / ");
+}
+
+export function findArchetype(id: string): CatalogArchetype | undefined {
+  return ARCHETYPES.find((archetype) => archetype.id === id);
 }
 
 export function findSpecies(value: string): CatalogSpecies | undefined {

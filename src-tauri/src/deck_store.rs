@@ -818,6 +818,15 @@ mod tests {
     }
 
     #[test]
+    fn a_legacy_limitless_source_still_round_trips() {
+        let mut temp = TempStore::new("limitless");
+        let deck = temp.store.save(SaveDeckInput { source: "limitless".into(), ..input(None, "x") }).unwrap();
+        assert_eq!(deck.current_version.source, "limitless");
+        let loaded = temp.store.get(&deck.id).unwrap().unwrap();
+        assert_eq!(loaded.current_version.source, "limitless");
+    }
+
+    #[test]
     fn in_memory_fallback_reports_the_library_unavailable() {
         let mut store = DeckStore::open_in_memory().unwrap();
         assert!(matches!(store.list(), Err(DeckStoreError::Unavailable)));
