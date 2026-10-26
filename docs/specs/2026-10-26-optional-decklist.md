@@ -161,7 +161,7 @@ interface DeckDraft {
   formatLabel: string;
   archetypeId: null | string;
   archetypeLabel: string;
-  archetypeCards: string[];   // 0–2 species slugs
+  archetypeSpecies: string[]; // 0–2 species names; resolved to slugs on save
   labelEdited: boolean;
 }
 ```
@@ -169,11 +169,11 @@ interface DeckDraft {
 Behavior:
 
 1. **Select catalog entry** → set `archetypeId`, `archetypeLabel`,
-   `archetypeCards`, `labelEdited = false`; set `formatLabel` to the catalog
+   `archetypeSpecies`, `labelEdited = false`; set `formatLabel` to the catalog
    entry’s `window` (overwrite).
-2. **Edit a species slot** → set `archetypeId = null`; update `cards`; if
-   `!labelEdited`, set the label to the selected species labels joined with
-   `" / "`.
+2. **Edit a species slot** → set `archetypeId = null`; update
+   `archetypeSpecies`; if `!labelEdited`, set the label to the selected species
+   labels joined with `" / "`.
 3. **Edit the label** → set `archetypeId = null` and `labelEdited = true`.
 4. **Re-select a catalog entry** → reset all three and `labelEdited = false`.
 5. **Clear both slots and the label** → archetype is null. If a format is
