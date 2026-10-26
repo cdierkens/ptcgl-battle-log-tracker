@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeDeckDraft,
   analyzeDecklist,
+  analyzeDecklistSnapshot,
   ARCHETYPES,
   deckSource,
   deriveArchetypeLabel,
@@ -10,6 +11,7 @@ import {
   FORMAT_WINDOWS,
   identityOf,
   isFormatWindow,
+  resolveArchetypeSlots,
   SPECIES,
   speciesLabelFor,
   speciesSlots,
@@ -95,6 +97,33 @@ describe("analyzeDeckDraft", () => {
     const result = analyzeDeckDraft("4");
     expect(result.kind).toBe("invalid");
     if (result.kind === "invalid") expect(result.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("analyzeDecklistSnapshot", () => {
+  it("skips blank snapshots", () => {
+    expect(analyzeDecklistSnapshot("  \n")).toBeNull();
+  });
+
+  it("analyzes a non-empty snapshot", () => {
+    expect(analyzeDecklistSnapshot(DRAGAPULT)).toMatchObject({ ok: true });
+  });
+});
+
+describe("resolveArchetypeSlots", () => {
+  it("dedupes species and reports duplicates and unknown names", () => {
+    expect(resolveArchetypeSlots(["Dragapult", "Dragapult"])).toMatchObject({
+      cards: ["dragapult"],
+      duplicate: true,
+      labels: ["Dragapult", "Dragapult"],
+      unknown: false,
+    });
+    expect(resolveArchetypeSlots(["Nope"])).toMatchObject({
+      cards: [],
+      duplicate: false,
+      labels: ["Nope"],
+      unknown: true,
+    });
   });
 });
 
