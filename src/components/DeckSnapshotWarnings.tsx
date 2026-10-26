@@ -2,7 +2,7 @@ import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 
-import { analyzeDecklist } from "../lib/deck-library";
+import { analyzeDecklistSnapshot } from "../lib/deck-library";
 import { StatusAlert } from "./StatusAlert";
 
 /**
@@ -18,7 +18,7 @@ export function DeckSnapshotWarnings({
   decklistText: string;
   onEditDeck?: () => void;
 }) {
-  const analysis = useMemo(() => analyzeDecklist(decklistText), [decklistText]);
+  const analysis = useMemo(() => analyzeDecklistSnapshot(decklistText), [decklistText]);
   const editAction =
     onEditDeck === undefined ? undefined : (
       <Button onClick={onEditDeck} size="sm" variant="outline">
@@ -26,6 +26,7 @@ export function DeckSnapshotWarnings({
       </Button>
     );
 
+  if (analysis === null) return null;
   if (!analysis.ok) {
     return (
       <StatusAlert actions={editAction} tone="info">

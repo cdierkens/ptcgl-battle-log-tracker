@@ -1,21 +1,20 @@
-import { listen } from "@tauri-apps/api/event";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { StatusAlert } from "@/components/StatusAlert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import type { CaptureStatusEvent } from "../lib/tauri";
+
 import { chipForState, isResultsState, matchNeedsPaste } from "../lib/capture-status";
 import { needsAttention } from "../lib/status-history";
 import { syncNeedsAttention } from "../lib/sync-status";
-import { type CaptureStatusEvent, OPEN_DECKS_EVENT, openDecks } from "../lib/tauri";
 import { useDecks } from "../lib/use-decks";
 import { useMatches } from "../lib/use-matches";
 import { useOverlayState } from "../lib/use-overlay-state";
 import { useSettings } from "../lib/use-settings";
 import { useSyncStatus } from "../lib/use-sync-status";
-import { ActiveDeckPicker } from "./ActiveDeckPicker";
 import { HelpTab } from "./HelpTab";
 import { MatchCard } from "./MatchCard";
 import { MatchList } from "./MatchList";
@@ -45,24 +44,6 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
   const attention = needsAttention(history);
   const errors = [overlay.error, settings.error, historyError, sync.error].filter((e): e is string => e !== null);
 
-  useEffect(() => {
-    if (onClose !== undefined) return;
-    const unlisten = listen(OPEN_DECKS_EVENT, () => setTab("decks"));
-    unlisten.catch(() => undefined);
-    return () => {
-      void unlisten.then((fn) => fn());
-    };
-  }, [onClose]);
-
-  const openDeckLibrary = () => {
-    if (onClose === undefined) {
-      setTab("decks");
-      return;
-    }
-    onClose();
-    void openDecks();
-  };
-
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -70,29 +51,17 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
           <h1 className="text-sm font-semibold">Battle Log Capture</h1>
           {chip !== null ? <Badge variant={chip.variant}>{chip.label}</Badge> : null}
         </div>
-        {onClose !== undefined ? (
+        {onClose === undefined ? null : (
           <Button aria-label="Close drawer" onClick={onClose} size="sm" variant="ghost">
             Close
           </Button>
-        ) : null}
+        )}
       </header>
       {errors.map((message) => (
         <StatusAlert className="m-3" key={message} tone="critical">
           {message}
         </StatusAlert>
       ))}
-      {onClose !== undefined ? (
-        <div className="border-b border-border px-4 py-2">
-          <ActiveDeckPicker
-            activeDeck={decks.activeDeck}
-            decks={decks.decks}
-            disabled={decks.saving}
-            error={decks.error}
-            onChange={(id) => void decks.setActive(id)}
-            variant="compact"
-          />
-        </div>
-      ) : null}
       {isResultsState(overlay.state) ? (
         <MatchCard
           clipboardOn={settings.settings?.clipboard_autosave ?? false}
@@ -105,7 +74,7 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
       <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setTab} value={tab}>
         <TabsList aria-label="Sections" className="mx-4 mt-2" variant="line">
           <TabsTrigger value="matches">Matches</TabsTrigger>
-          {onClose === undefined ? <TabsTrigger value="decks">Decks</TabsTrigger> : null}
+          <TabsTrigger value="decks">Decks</TabsTrigger>
           <TabsTrigger value="settings">
             Settings
             {syncNeedsAttention(sync.status, destinations) ? <AttentionDot /> : null}
@@ -125,18 +94,16 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
             decks={decks}
             destinations={destinations}
             matches={matches}
-            onOpenDecks={openDeckLibrary}
+            onOpenDecks={() => setTab("decks")}
             playerName={playerName}
             sync={sync.status}
           />
         </TabsContent>
-        {onClose === undefined ? (
-          <TabsContent className="min-h-0 overflow-y-auto" value="decks">
-            <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading decks…</p>}>
-              <DecksTab />
-            </Suspense>
-          </TabsContent>
-        ) : null}
+        <TabsContent className="min-h-0 overflow-y-auto" value="decks">
+          <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading decks…</p>}>
+            <DecksTab />
+          </Suspense>
+        </TabsContent>
         <TabsContent className="min-h-0 overflow-y-auto" value="settings">
           <SettingsTab settings={settings} sync={sync.status} />
         </TabsContent>

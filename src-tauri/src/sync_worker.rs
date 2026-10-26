@@ -45,7 +45,6 @@ struct DeckPayload<'a> {
     format: &'a str,
     archetype: Option<&'a ArchetypeRef>,
     opponent_archetype: Option<&'a ArchetypeRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     identity: Option<DeckIdentity<'a>>,
 }
 
@@ -405,6 +404,27 @@ mod tests {
                 .unwrap();
             store.assign_match_deck(LOG, &deck.id).unwrap();
         }
+
+        fn seed_metadata_deck(&self, format: &str) {
+            let mut store = crate::deck_store::lock(&self.worker.decks);
+            let deck = store
+                .save(SaveDeckInput {
+                    id: None,
+                    name: "Format only".into(),
+                    source: "metadata".into(),
+                    raw_text: String::new(),
+                    decklist_text: String::new(),
+                    format_label: Some(format.into()),
+                    archetype: Some(ArchetypeRef { id: None, label: "Custom".into(), cards: vec!["dragapult".into()] }),
+                    deck_id_hash: None,
+                    list_id_hash: None,
+                    hash_version: None,
+                    catalog_version: None,
+                    catalog_context_id: None,
+                })
+                .unwrap();
+            store.assign_match_deck(LOG, &deck.id).unwrap();
+        }
     }
 
     #[test]
@@ -475,6 +495,23 @@ mod tests {
         assert_eq!(json["deck"]["identity"]["deckId"], "sha256:deck");
         assert_eq!(json["deck"]["identity"]["listId"], "sha256:list");
         assert_eq!(json["deck"]["identity"]["hashVersion"], 1);
+    }
+
+    #[test]
+    fn a_metadata_only_deck_sends_an_empty_decklist() {
+        let rig = Rig::new("deck-metadata");
+        rig.seed_metadata_deck("TEF-30C");
+        rig.enable_deck_identity();
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(json["deck"]["decklist"], "");
+        assert_eq!(json["deck"]["format"], "TEF-30C");
+        assert_eq!(json["deck"]["archetype"]["label"], "Custom");
+        assert_eq!(json["deck"]["archetype"]["id"], serde_json::Value::Null);
+        assert_eq!(json["deck"]["archetype"]["cards"], serde_json::json!(["dragapult"]));
+        assert_eq!(json["deck"]["identity"], serde_json::Value::Null);
     }
 
     #[test]

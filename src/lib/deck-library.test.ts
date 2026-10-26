@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeDecklist, identityOf, isFormatWindow } from "./deck-library";
+import {
+  analyzeDeckDraft,
+  analyzeDecklist,
+  analyzeDecklistSnapshot,
+  ARCHETYPES,
+  deckSource,
+  deriveArchetypeLabel,
+  findSpecies,
+  FORMAT_WINDOWS,
+  identityOf,
+  isFormatWindow,
+  resolveArchetypeSlots,
+  SPECIES,
+  speciesLabelFor,
+  speciesSlots,
+} from "./deck-library";
 
 const DRAGAPULT = `Pokémon: 1
 1 Dragapult ex TWM 130
@@ -46,6 +61,70 @@ describe("analyzeDecklist", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.length).toBeGreaterThan(0);
   });
+
+  it("keeps PTCGL's grouped section counts visible as warnings", () => {
+    const ptcgl = DRAGAPULT.replace("Trainer: 4", "Trainer: 1").replace("Energy: 2", "Energy: 1");
+    const result = preview(ptcgl);
+
+    expect(result.sections).toEqual([
+      { count: 1, section: "pokemon" },
+      { count: 4, section: "trainer" },
+      { count: 2, section: "energy" },
+    ]);
+    expect(result.warnings.join(" ")).toContain("trainer header declares 1, parsed 4");
+    expect(result.warnings.join(" ")).toContain("energy header declares 1, parsed 2");
+  });
+
+  it("keeps a genuinely wrong section header visible", () => {
+    const result = preview(DRAGAPULT.replace("Trainer: 4", "Trainer: 2"));
+
+    expect(result.warnings.join(" ")).toContain("trainer header declares 2, parsed 4");
+  });
+});
+
+describe("analyzeDeckDraft", () => {
+  it("treats blank text as no list", () => {
+    expect(analyzeDeckDraft("  \n")).toEqual({ kind: "empty" });
+  });
+
+  it("returns the preview for a valid list", () => {
+    const result = analyzeDeckDraft(DRAGAPULT);
+    expect(result.kind).toBe("valid");
+    if (result.kind === "valid") expect(result.preview.decklist).toContain("Dragapult ex");
+  });
+
+  it("returns parser errors for an invalid list", () => {
+    const result = analyzeDeckDraft("4");
+    expect(result.kind).toBe("invalid");
+    if (result.kind === "invalid") expect(result.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("analyzeDecklistSnapshot", () => {
+  it("skips blank snapshots", () => {
+    expect(analyzeDecklistSnapshot("  \n")).toBeNull();
+  });
+
+  it("analyzes a non-empty snapshot", () => {
+    expect(analyzeDecklistSnapshot(DRAGAPULT)).toMatchObject({ ok: true });
+  });
+});
+
+describe("resolveArchetypeSlots", () => {
+  it("dedupes species and reports duplicates and unknown names", () => {
+    expect(resolveArchetypeSlots(["Dragapult", "Dragapult"])).toMatchObject({
+      cards: ["dragapult"],
+      duplicate: true,
+      labels: ["Dragapult", "Dragapult"],
+      unknown: false,
+    });
+    expect(resolveArchetypeSlots(["Nope"])).toMatchObject({
+      cards: [],
+      duplicate: false,
+      labels: ["Nope"],
+      unknown: true,
+    });
+  });
 });
 
 describe("identityOf", () => {
@@ -64,5 +143,49 @@ describe("isFormatWindow", () => {
   it("distinguishes a set window from an opaque label", () => {
     expect(isFormatWindow("TEF-30C")).toBe(true);
     expect(isFormatWindow("Expanded")).toBe(false);
+  });
+});
+
+describe("deckSource", () => {
+  it("recognises an export and treats a bare list as typed", () => {
+    expect(deckSource(DRAGAPULT)).toBe("ptcgl");
+    expect(deckSource("4 Ultra Ball SVI 196\n2 Basic Fire Energy MEE 10")).toBe("typed");
+  });
+
+  it("marks blank text as metadata", () => {
+    expect(deckSource("  \n")).toBe("metadata");
+  });
+});
+
+describe("species catalog", () => {
+  it("exposes the shipped catalog counts", () => {
+    expect(SPECIES).toHaveLength(112);
+    expect(ARCHETYPES).toHaveLength(163);
+  });
+
+  it("exposes unique labels and slugs", () => {
+    expect(new Set(SPECIES.map((species) => species.slug)).size).toBe(SPECIES.length);
+    expect(new Set(SPECIES.map((species) => species.label)).size).toBe(SPECIES.length);
+  });
+
+  it("round-trips labels and slugs", () => {
+    expect(findSpecies("Dragapult")?.slug).toBe("dragapult");
+    expect(findSpecies("dragapult")?.label).toBe("Dragapult");
+    expect(speciesLabelFor("excadrill-mega")).toBe("Mega Excadrill");
+  });
+
+  it("derives a label from names", () => {
+    expect(deriveArchetypeLabel(["Dragapult", "Blaziken"])).toBe("Dragapult / Blaziken");
+    expect(deriveArchetypeLabel(["Dragapult", "Dragapult"])).toBe("Dragapult");
+    expect(deriveArchetypeLabel([])).toBe("");
+  });
+
+  it("exposes the catalog windows", () => {
+    expect(FORMAT_WINDOWS).toContain("TEF-30C");
+  });
+
+  it("builds two display slots", () => {
+    expect(speciesSlots(["dragapult"])).toEqual(["Dragapult", ""]);
+    expect(speciesSlots(["dragapult", "blaziken"])).toEqual(["Dragapult", "Blaziken"]);
   });
 });
