@@ -9,11 +9,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use argon2::{Algorithm, Argon2, Params, Version};
-use rand::RngCore;
+use rand::{rng, RngExt};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use thiserror::Error;
@@ -87,12 +87,12 @@ impl FileSecretStore {
             return Ok(());
         }
         let vault: Vault = serde_json::from_slice(&data)?;
-        let cipher = Aes256Gcm::new(self.key.as_ref().into());
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_ref()).map_err(|e| StoreError::Crypto(e.to_string()))?;
 
         let mut cache = self.cache.lock().map_err(|_| StoreError::Crypto("lock poisoned".into()))?;
         for (account, entry) in vault.entries {
-            let nonce = Nonce::from_slice(&entry.nonce);
-            let plaintext = cipher.decrypt(nonce, entry.ciphertext.as_ref()).map_err(|_| StoreError::Corrupted)?;
+            let nonce = Nonce::try_from(entry.nonce.as_slice()).map_err(|_| StoreError::Corrupted)?;
+            let plaintext = cipher.decrypt(&nonce, entry.ciphertext.as_ref()).map_err(|_| StoreError::Corrupted)?;
             cache.insert(account, String::from_utf8(plaintext).map_err(|_| StoreError::Corrupted)?);
         }
         Ok(())
@@ -100,18 +100,18 @@ impl FileSecretStore {
 
     fn save(&self) -> Result<(), StoreError> {
         let cache = self.cache.lock().map_err(|_| StoreError::Crypto("lock poisoned".into()))?;
-        let cipher = Aes256Gcm::new(self.key.as_ref().into());
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_ref()).map_err(|e| StoreError::Crypto(e.to_string()))?;
 
         // Generate fresh salt for each save (forward secrecy-ish).
         let mut salt = [0u8; 16];
-        OsRng.fill_bytes(&mut salt);
+        rng().fill(&mut salt);
 
         let mut entries = HashMap::new();
         for (account, secret) in cache.iter() {
             let mut nonce = [0u8; 12];
-            OsRng.fill_bytes(&mut nonce);
+            rng().fill(&mut nonce);
             let ciphertext = cipher
-                .encrypt(Nonce::from_slice(&nonce), secret.as_bytes())
+                .encrypt(&Nonce::try_from(nonce.as_slice()).map_err(|_| StoreError::Corrupted)?, secret.as_bytes())
                 .map_err(|e| StoreError::Crypto(e.to_string()))?;
             entries.insert(account.clone(), EncryptedEntry { nonce, ciphertext });
         }
