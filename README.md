@@ -23,15 +23,15 @@ Download the latest release from [GitHub Releases](https://github.com/cdierkens/
 
 ### macOS
 
-- **PTCGL.Tracker_0.2.0_aarch64.dmg** — disk image, drag to Applications
-- **PTCGL.Tracker_0.2.0_aarch64.app.zip** — zipped app bundle
+- **PTCGL.Tracker_0.3.1_aarch64.dmg** — disk image, drag to Applications
+- **PTCGL.Tracker_0.3.1_aarch64.app.zip** — zipped app bundle
 
-On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog.
+On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog. If macOS says the app is **damaged**, you are using v0.3.0; download v0.3.1 instead.
 
 ### Windows
 
-- **PTCGL.Tracker_0.2.0_x64_en-US.msi** — WiX installer
-- **PTCGL.Tracker_0.2.0_x64-setup.exe** — NSIS installer
+- **PTCGL.Tracker_0.3.1_x64_en-US.msi** — WiX installer
+- **PTCGL.Tracker_0.3.1_x64-setup.exe** — NSIS installer
 
 SmartScreen flags the unsigned installer — choose **More info** → **Run anyway**.
 

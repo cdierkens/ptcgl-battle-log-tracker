@@ -7,3 +7,6 @@ ship-windows/
 .envrc.local
 .DS_Store
 *.utm/
+
+# Local worktrees
+.worktrees/
