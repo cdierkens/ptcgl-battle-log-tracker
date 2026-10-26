@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeDecklist, deckSource, identityOf, isFormatWindow } from "./deck-library";
+import {
+  analyzeDeckDraft,
+  analyzeDecklist,
+  ARCHETYPES,
+  deckSource,
+  deriveArchetypeLabel,
+  findSpecies,
+  FORMAT_WINDOWS,
+  identityOf,
+  isFormatWindow,
+  SPECIES,
+  speciesLabelFor,
+  speciesSlots,
+} from "./deck-library";
 
 const DRAGAPULT = `Pokémon: 1
 1 Dragapult ex TWM 130
@@ -67,6 +80,24 @@ describe("analyzeDecklist", () => {
   });
 });
 
+describe("analyzeDeckDraft", () => {
+  it("treats blank text as no list", () => {
+    expect(analyzeDeckDraft("  \n")).toEqual({ kind: "empty" });
+  });
+
+  it("returns the preview for a valid list", () => {
+    const result = analyzeDeckDraft(DRAGAPULT);
+    expect(result.kind).toBe("valid");
+    if (result.kind === "valid") expect(result.preview.decklist).toContain("Dragapult ex");
+  });
+
+  it("returns parser errors for an invalid list", () => {
+    const result = analyzeDeckDraft("4");
+    expect(result.kind).toBe("invalid");
+    if (result.kind === "invalid") expect(result.errors.length).toBeGreaterThan(0);
+  });
+});
+
 describe("identityOf", () => {
   it("keeps deckId stable and listId different when printings change", async () => {
     const first = await identityOf(preview("4 Acerola's Mischief MEG 113").deck);
@@ -90,5 +121,42 @@ describe("deckSource", () => {
   it("recognises an export and treats a bare list as typed", () => {
     expect(deckSource(DRAGAPULT)).toBe("ptcgl");
     expect(deckSource("4 Ultra Ball SVI 196\n2 Basic Fire Energy MEE 10")).toBe("typed");
+  });
+
+  it("marks blank text as metadata", () => {
+    expect(deckSource("  \n")).toBe("metadata");
+  });
+});
+
+describe("species catalog", () => {
+  it("exposes the shipped catalog counts", () => {
+    expect(SPECIES).toHaveLength(112);
+    expect(ARCHETYPES).toHaveLength(163);
+  });
+
+  it("exposes unique labels and slugs", () => {
+    expect(new Set(SPECIES.map((species) => species.slug)).size).toBe(SPECIES.length);
+    expect(new Set(SPECIES.map((species) => species.label)).size).toBe(SPECIES.length);
+  });
+
+  it("round-trips labels and slugs", () => {
+    expect(findSpecies("Dragapult")?.slug).toBe("dragapult");
+    expect(findSpecies("dragapult")?.label).toBe("Dragapult");
+    expect(speciesLabelFor("excadrill-mega")).toBe("Mega Excadrill");
+  });
+
+  it("derives a label from names", () => {
+    expect(deriveArchetypeLabel(["Dragapult", "Blaziken"])).toBe("Dragapult / Blaziken");
+    expect(deriveArchetypeLabel(["Dragapult", "Dragapult"])).toBe("Dragapult");
+    expect(deriveArchetypeLabel([])).toBe("");
+  });
+
+  it("exposes the catalog windows", () => {
+    expect(FORMAT_WINDOWS).toContain("TEF-30C");
+  });
+
+  it("builds two display slots", () => {
+    expect(speciesSlots(["dragapult"])).toEqual(["Dragapult", ""]);
+    expect(speciesSlots(["dragapult", "blaziken"])).toEqual(["Dragapult", "Blaziken"]);
   });
 });

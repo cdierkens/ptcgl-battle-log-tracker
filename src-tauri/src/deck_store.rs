@@ -4,6 +4,7 @@
 //! serializable snapshot that the UI sends, and the delivery worker reads it
 //! when building an envelope. This module never parses a decklist.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -115,6 +116,25 @@ pub enum DeckStoreError {
     NotFound,
     #[error("deck library is unavailable")]
     Unavailable,
+}
+
+fn validate_archetype(archetype: &ArchetypeRef) -> Result<(), DeckStoreError> {
+    if archetype.label.trim().is_empty() {
+        return Err(DeckStoreError::Invalid("archetype label is required".into()));
+    }
+    if archetype.cards.len() > 2 {
+        return Err(DeckStoreError::Invalid("an archetype has at most two Pokémon".into()));
+    }
+    let mut seen = HashSet::new();
+    for card in &archetype.cards {
+        if card.trim().is_empty() {
+            return Err(DeckStoreError::Invalid("archetype Pokémon cannot be empty".into()));
+        }
+        if !seen.insert(card.as_str()) {
+            return Err(DeckStoreError::Invalid("archetype Pokémon must be unique".into()));
+        }
+    }
+    Ok(())
 }
 
 /// Shared by commands and the delivery worker; `Connection` isn't `Sync`.
@@ -402,14 +422,32 @@ impl DeckStore {
         if name.is_empty() {
             return Err(DeckStoreError::Invalid("deck name is required".into()));
         }
-        if !matches!(input.source.as_str(), "ptcgl" | "limitless" | "typed") {
+        if !matches!(input.source.as_str(), "ptcgl" | "limitless" | "typed" | "metadata") {
             return Err(DeckStoreError::Invalid(format!("unsupported deck source: {}", input.source)));
         }
-        if input.raw_text.trim().is_empty() || input.decklist_text.trim().is_empty() {
-            return Err(DeckStoreError::Invalid("decklist is required".into()));
+
+        let has_raw_text = !input.raw_text.trim().is_empty();
+        let has_decklist_text = !input.decklist_text.trim().is_empty();
+        if has_raw_text != has_decklist_text {
+            return Err(DeckStoreError::Invalid("raw text and decklist text must both be present or absent".into()));
+        }
+        let has_list = has_raw_text && has_decklist_text;
+        if input.source == "metadata" && has_list {
+            return Err(DeckStoreError::Invalid("metadata source cannot have a decklist".into()));
+        }
+        if input.source != "metadata" && !has_list {
+            return Err(DeckStoreError::Invalid("a decklist is required for this source".into()));
         }
 
         let format_label = input.format_label.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned);
+        if !has_list && format_label.is_none() {
+            return Err(DeckStoreError::Invalid("a format is required when there is no decklist".into()));
+        }
+        if let Some(archetype) = &input.archetype {
+            validate_archetype(archetype)?;
+        }
+        let raw_text = if has_list { input.raw_text } else { String::new() };
+        let decklist_text = if has_list { input.decklist_text } else { String::new() };
         let archetype_json = input.archetype.as_ref().map(serde_json::to_string).transpose()?;
         let now = now_ms();
         let version_id = new_id("ver");
@@ -443,8 +481,8 @@ impl DeckStore {
                 version_id,
                 deck_id,
                 input.source,
-                input.raw_text,
-                input.decklist_text,
+                raw_text,
+                decklist_text,
                 format_label,
                 archetype_json,
                 input.deck_id_hash,
@@ -651,6 +689,141 @@ mod tests {
         let mut temp = TempStore::new("source");
         let error = temp.store.save(SaveDeckInput { source: "ocr".into(), ..input(None, "x") }).unwrap_err();
         assert!(matches!(error, DeckStoreError::Invalid(_)));
+    }
+
+    #[test]
+    fn saves_a_format_only_deck_without_a_list() {
+        let mut temp = TempStore::new("metadata");
+        let deck = temp
+            .store
+            .save(SaveDeckInput {
+                archetype: Some(ArchetypeRef { cards: vec!["dragapult".into()], id: None, label: "Dragapult".into() }),
+                catalog_context_id: None,
+                catalog_version: None,
+                deck_id_hash: None,
+                decklist_text: String::new(),
+                format_label: Some("TEF-30C".into()),
+                hash_version: None,
+                list_id_hash: None,
+                raw_text: String::new(),
+                source: "metadata".into(),
+                ..input(None, "Format only")
+            })
+            .unwrap();
+        assert_eq!(deck.current_version.raw_text, "");
+        assert_eq!(deck.current_version.decklist_text, "");
+        assert_eq!(deck.current_version.source, "metadata");
+        assert_eq!(deck.current_version.deck_id_hash, None);
+        assert_eq!(deck.current_version.list_id_hash, None);
+        assert_eq!(deck.current_version.hash_version, None);
+        assert_eq!(deck.current_version.format_label.as_deref(), Some("TEF-30C"));
+        assert_eq!(
+            deck.current_version.archetype.as_ref().map(|archetype| archetype.label.as_str()),
+            Some("Dragapult")
+        );
+    }
+
+    #[test]
+    fn rejects_metadata_source_with_a_decklist() {
+        let mut temp = TempStore::new("metadata-list");
+        let error = temp.store.save(SaveDeckInput { source: "metadata".into(), ..input(None, "x") }).unwrap_err();
+        assert!(matches!(error, DeckStoreError::Invalid(_)));
+    }
+
+    #[test]
+    fn rejects_a_no_list_deck_without_a_format() {
+        let mut temp = TempStore::new("metadata-no-format");
+        let error = temp
+            .store
+            .save(SaveDeckInput {
+                archetype: None,
+                catalog_context_id: None,
+                catalog_version: None,
+                deck_id_hash: None,
+                decklist_text: String::new(),
+                format_label: None,
+                hash_version: None,
+                list_id_hash: None,
+                raw_text: String::new(),
+                source: "metadata".into(),
+                ..input(None, "x")
+            })
+            .unwrap_err();
+        assert!(matches!(error, DeckStoreError::Invalid(_)));
+    }
+
+    #[test]
+    fn rejects_partial_list_text() {
+        let mut temp = TempStore::new("partial-list");
+        let error = temp.store.save(SaveDeckInput { raw_text: String::new(), ..input(None, "x") }).unwrap_err();
+        assert!(matches!(error, DeckStoreError::Invalid(_)));
+    }
+
+    #[test]
+    fn rejects_duplicate_or_oversized_archetype_cards() {
+        let mut temp = TempStore::new("archetype-cards");
+        let duplicate =
+            ArchetypeRef { cards: vec!["dragapult".into(), "dragapult".into()], id: None, label: "Dragapult".into() };
+        let duplicate_error =
+            temp.store.save(SaveDeckInput { archetype: Some(duplicate), ..input(None, "x") }).unwrap_err();
+        assert!(matches!(duplicate_error, DeckStoreError::Invalid(_)));
+
+        let oversized = ArchetypeRef {
+            cards: vec!["dragapult".into(), "dusknoir".into(), "blaziken".into()],
+            id: None,
+            label: "Three".into(),
+        };
+        let oversized_error =
+            temp.store.save(SaveDeckInput { archetype: Some(oversized), ..input(None, "x") }).unwrap_err();
+        assert!(matches!(oversized_error, DeckStoreError::Invalid(_)));
+    }
+
+    #[test]
+    fn accepts_a_label_only_archetype() {
+        let mut temp = TempStore::new("archetype-label");
+        let deck = temp
+            .store
+            .save(SaveDeckInput {
+                archetype: Some(ArchetypeRef { cards: vec![], id: None, label: "Custom".into() }),
+                ..input(None, "x")
+            })
+            .unwrap();
+        assert_eq!(deck.current_version.archetype.as_ref().map(|archetype| archetype.label.as_str()), Some("Custom"));
+    }
+
+    #[test]
+    fn a_metadata_only_snapshot_keeps_an_empty_list() {
+        let mut temp = TempStore::new("metadata-snapshot");
+        let deck = temp
+            .store
+            .save(SaveDeckInput {
+                archetype: Some(ArchetypeRef { cards: vec!["dragapult".into()], id: None, label: "Dragapult".into() }),
+                catalog_context_id: None,
+                catalog_version: None,
+                deck_id_hash: None,
+                decklist_text: String::new(),
+                format_label: Some("TEF-30C".into()),
+                hash_version: None,
+                list_id_hash: None,
+                raw_text: String::new(),
+                source: "metadata".into(),
+                ..input(None, "Format only")
+            })
+            .unwrap();
+        let snapshot = temp.store.assign_match_deck("ptcgl-meta.txt", &deck.id).unwrap();
+        assert_eq!(snapshot.decklist_text, "");
+        assert_eq!(snapshot.deck_id_hash, None);
+        assert_eq!(snapshot.list_id_hash, None);
+        assert_eq!(snapshot.format_label.as_deref(), Some("TEF-30C"));
+    }
+
+    #[test]
+    fn a_legacy_limitless_source_still_round_trips() {
+        let mut temp = TempStore::new("limitless");
+        let deck = temp.store.save(SaveDeckInput { source: "limitless".into(), ..input(None, "x") }).unwrap();
+        assert_eq!(deck.current_version.source, "limitless");
+        let loaded = temp.store.get(&deck.id).unwrap().unwrap();
+        assert_eq!(loaded.current_version.source, "limitless");
     }
 
     #[test]

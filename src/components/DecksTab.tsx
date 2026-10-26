@@ -16,8 +16,15 @@ import { Button } from "@/components/ui/button";
 
 import type { Deck, SaveDeckInput } from "../lib/tauri";
 
-import { BLANK_DECK_DRAFT, type DeckDraft, selectedArchetype } from "../lib/deck-draft";
-import { analyzeDecklist, deckSource, identityOf } from "../lib/deck-library";
+import {
+  archetypeFromDraft,
+  BLANK_DECK_DRAFT,
+  type DeckDraft,
+  deckDraftErrors,
+  deriveArchetypeLabelIfNeeded,
+  draftFromDeck,
+} from "../lib/deck-draft";
+import { analyzeDeckDraft, deckSource, identityOf } from "../lib/deck-library";
 import { useDecks } from "../lib/use-decks";
 import { ActiveDeckPicker } from "./ActiveDeckPicker";
 import { DeckForm } from "./DeckForm";
@@ -30,14 +37,16 @@ export function DecksTab() {
   const [draft, setDraft] = useState<DeckDraft>(BLANK_DECK_DRAFT);
   const [formError, setFormError] = useState<null | string>(null);
   const [pendingArchive, setPendingArchive] = useState<Deck | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
 
-  const analysis = useMemo(() => analyzeDecklist(draft.text), [draft.text]);
-  const preview = analysis.ok ? analysis.preview : null;
+  const analysis = useMemo(() => analyzeDeckDraft(draft.text), [draft.text]);
+  const errors = deckDraftErrors(analysis, draft);
 
   const reset = () => {
     setEditing(null);
     setDraft(BLANK_DECK_DRAFT);
     setFormError(null);
+    setShowErrors(false);
     setShowForm(false);
   };
 
@@ -47,44 +56,37 @@ export function DecksTab() {
   };
 
   const startEdit = (deck: Deck) => {
-    const version = deck.currentVersion;
     setEditing(deck);
-    setDraft({
-      archetypeKey: version.archetype?.id ?? version.archetype?.label ?? "",
-      formatLabel: version.formatLabel ?? "",
-      name: deck.name,
-      text: version.rawText,
-    });
+    setDraft(draftFromDeck(deck));
     setFormError(null);
+    setShowErrors(false);
     setShowForm(true);
   };
 
   const save = async () => {
-    if (draft.name.trim() === "") {
-      setFormError("Give the deck a name.");
-      return;
-    }
-    if (!analysis.ok) {
-      setFormError(analysis.errors.join(" "));
-      return;
-    }
+    const draftToSave = deriveArchetypeLabelIfNeeded(draft);
+    if (draftToSave !== draft) setDraft(draftToSave);
+    setShowErrors(true);
+    setFormError(null);
+    const currentErrors = deckDraftErrors(analysis, draftToSave);
+    if (Object.values(currentErrors).some((error) => error !== null)) return;
 
     try {
-      const selected = selectedArchetype(analysis.preview, draft.archetypeKey, editing);
-      const identity = await identityOf(analysis.preview.deck);
+      const preview = analysis.kind === "valid" ? analysis.preview : null;
+      const identity = preview === null ? null : await identityOf(preview.deck);
       const input: SaveDeckInput = {
-        archetype: selected,
-        catalogContextId: identity.catalogContextId,
-        catalogVersion: identity.catalogVersion,
-        deckIdHash: identity.deckId,
-        decklistText: analysis.preview.decklist,
-        formatLabel: draft.formatLabel.trim() === "" ? null : draft.formatLabel.trim(),
-        hashVersion: identity.hashVersion,
+        archetype: archetypeFromDraft(draftToSave),
+        catalogContextId: identity?.catalogContextId ?? null,
+        catalogVersion: identity?.catalogVersion ?? null,
+        deckIdHash: identity?.deckId ?? null,
+        decklistText: preview?.decklist ?? "",
+        formatLabel: draftToSave.formatLabel.trim() === "" ? null : draftToSave.formatLabel.trim(),
+        hashVersion: identity?.hashVersion ?? null,
         id: editing?.id,
-        listIdHash: identity.listId,
-        name: draft.name.trim(),
-        rawText: draft.text,
-        source: deckSource(draft.text),
+        listIdHash: identity?.listId ?? null,
+        name: draftToSave.name.trim(),
+        rawText: preview === null ? "" : draftToSave.text,
+        source: deckSource(draftToSave.text),
       };
 
       const saved = await decks.save(input);
@@ -126,11 +128,12 @@ export function DecksTab() {
           analysis={analysis}
           draft={draft}
           editing={editing}
+          errors={errors}
           onCancel={reset}
           onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
           onSave={() => void save()}
-          preview={preview}
           saving={decks.saving}
+          showErrors={showErrors}
         />
       ) : null}
 
@@ -139,7 +142,7 @@ export function DecksTab() {
       ) : decks.decks.length === 0 ? (
         <div className="rounded-md border border-border p-6 text-center">
           <p className="text-sm font-medium">No decks yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">Add a PTCGL export, a Limitless paste, or a typed list.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Add a list, or start with a format or archetype.</p>
         </div>
       ) : (
         <ul className="space-y-2">
