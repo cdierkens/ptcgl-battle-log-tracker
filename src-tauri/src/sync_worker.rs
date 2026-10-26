@@ -10,6 +10,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 use tracing::warn;
 
+use crate::deck_store::{self, ArchetypeRef, MatchDeck, SharedDeckStore};
 use crate::delivery_queue::{self, Delivery, SharedQueue};
 use crate::destinations::Destination;
 use crate::logs;
@@ -31,6 +32,30 @@ struct Envelope<'a> {
     player_name: Option<&'a str>,
     saved_at: String,
     app_version: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deck: Option<DeckPayload<'a>>,
+}
+
+/// The portable deck identity, only when the destination opts in and the
+/// match has a snapshot with a confirmed format.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeckPayload<'a> {
+    decklist: &'a str,
+    format: &'a str,
+    archetype: Option<&'a ArchetypeRef>,
+    opponent_archetype: Option<&'a ArchetypeRef>,
+    identity: Option<DeckIdentity<'a>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeckIdentity<'a> {
+    deck_id: &'a str,
+    list_id: &'a str,
+    hash_version: i64,
+    catalog_version: Option<&'a str>,
+    catalog_context_id: Option<&'a str>,
 }
 
 /// What a send means for its delivery.
@@ -56,6 +81,7 @@ fn classify(response: Result<u16, String>) -> Outcome {
 pub struct Worker {
     pub queue: SharedQueue,
     pub settings: SharedSettings,
+    pub decks: SharedDeckStore,
     pub secrets: Arc<dyn SecretStore>,
     pub transport: Box<dyn DeliveryTransport>,
     /// Held deliveries wait while this is true (Undo is still possible).
@@ -175,12 +201,16 @@ impl Worker {
             Ok(text) => text,
             Err(e) => return Some(Outcome::Retry(e)),
         };
+        // A deck-store failure must never fail the delivery: read returns None
+        // and the base envelope still goes out.
+        let snapshot = if destination.send_deck_identity { self.match_deck(log) } else { None };
         let envelope = Envelope {
             schema_version: SCHEMA_VERSION,
             log: &text,
             player_name: Some(settings.player_name.trim()).filter(|name| !name.is_empty()),
             saved_at: saved_at(&path),
             app_version: &self.app_version,
+            deck: snapshot.as_ref().and_then(deck_payload),
         };
         let body = match serde_json::to_string(&envelope) {
             Ok(body) => body,
@@ -189,6 +219,38 @@ impl Worker {
         let request = DeliveryRequest { url: &destination.url, token, headers: &destination.headers, body: &body };
         Some(classify(self.transport.post(&request)))
     }
+
+    fn match_deck(&self, log: &str) -> Option<MatchDeck> {
+        match deck_store::lock(&self.decks).match_deck(log) {
+            Ok(snapshot) => snapshot,
+            Err(e) => {
+                warn!("sync: couldn't read deck snapshot for {log}: {e}");
+                None
+            }
+        }
+    }
+}
+
+/// A deck without a confirmed format stays local; it is not sent as an object.
+fn deck_payload(snapshot: &MatchDeck) -> Option<DeckPayload<'_>> {
+    let format = snapshot.format_label.as_deref()?;
+    let identity = match (&snapshot.deck_id_hash, &snapshot.list_id_hash, snapshot.hash_version) {
+        (Some(deck_id), Some(list_id), Some(hash_version)) => Some(DeckIdentity {
+            deck_id,
+            list_id,
+            hash_version,
+            catalog_version: snapshot.catalog_version.as_deref(),
+            catalog_context_id: snapshot.catalog_context_id.as_deref(),
+        }),
+        _ => None,
+    };
+    Some(DeckPayload {
+        decklist: &snapshot.decklist_text,
+        format,
+        archetype: snapshot.archetype.as_ref(),
+        opponent_archetype: snapshot.opponent_archetype.as_ref(),
+        identity,
+    })
 }
 
 /// Each destination's token, read from the keychain at most once per tick.
@@ -219,6 +281,7 @@ mod tests {
     use std::sync::{Mutex, RwLock};
 
     use super::*;
+    use crate::deck_store::{DeckStore, SaveDeckInput};
     use crate::delivery_queue::{DeliveryQueue, DeliveryState, Release};
     use crate::ports::MemSecretStore;
 
@@ -267,6 +330,7 @@ mod tests {
                 headers: BTreeMap::from([("X-Client".into(), "tracker".into())]),
                 token_url: None,
                 enabled: true,
+                send_deck_identity: false,
             };
             let settings =
                 Settings { player_name: " ash ".into(), destinations: vec![destination], ..Settings::defaults(&dir) };
@@ -275,9 +339,11 @@ mod tests {
             let transport = Arc::new(FakeTransport::default());
             let results_up = Arc::new(AtomicBool::new(false));
             let up = Arc::clone(&results_up);
+            let decks = Arc::new(Mutex::new(DeckStore::open(&dir.join("decks.sqlite")).unwrap()));
             let worker = Worker {
                 queue: Arc::new(Mutex::new(DeliveryQueue::open_in_memory().unwrap())),
                 settings: Arc::new(RwLock::new(settings)),
+                decks,
                 secrets: Arc::new(secrets),
                 transport: Box::new(Arc::clone(&transport)),
                 results_up: Box::new(move || up.load(Ordering::SeqCst)),
@@ -308,6 +374,56 @@ mod tests {
             let mut s = settings::current(&self.worker.settings);
             f(&mut s);
             settings::replace(&self.worker.settings, s);
+        }
+
+        fn enable_deck_identity(&self) {
+            self.update_settings(|s| s.destinations[0].send_deck_identity = true);
+        }
+
+        fn seed_deck(&self, format: Option<&str>) {
+            let mut store = crate::deck_store::lock(&self.worker.decks);
+            let deck = store
+                .save(SaveDeckInput {
+                    id: None,
+                    name: "League deck".into(),
+                    source: "ptcgl".into(),
+                    raw_text: "4 Ultra Ball SVI 196".into(),
+                    decklist_text: "Trainer: 4\n4 Ultra Ball SVI 196\n\nTotal Cards: 4\n".into(),
+                    format_label: format.map(str::to_owned),
+                    archetype: Some(ArchetypeRef {
+                        id: Some("limitless:test".into()),
+                        label: "Test deck".into(),
+                        cards: vec!["ultra-ball".into()],
+                    }),
+                    deck_id_hash: Some("sha256:deck".into()),
+                    list_id_hash: Some("sha256:list".into()),
+                    hash_version: Some(1),
+                    catalog_version: Some("2026-10-23".into()),
+                    catalog_context_id: Some("catalog:test".into()),
+                })
+                .unwrap();
+            store.assign_match_deck(LOG, &deck.id).unwrap();
+        }
+
+        fn seed_metadata_deck(&self, format: &str) {
+            let mut store = crate::deck_store::lock(&self.worker.decks);
+            let deck = store
+                .save(SaveDeckInput {
+                    id: None,
+                    name: "Format only".into(),
+                    source: "metadata".into(),
+                    raw_text: String::new(),
+                    decklist_text: String::new(),
+                    format_label: Some(format.into()),
+                    archetype: Some(ArchetypeRef { id: None, label: "Custom".into(), cards: vec!["dragapult".into()] }),
+                    deck_id_hash: None,
+                    list_id_hash: None,
+                    hash_version: None,
+                    catalog_version: None,
+                    catalog_context_id: None,
+                })
+                .unwrap();
+            store.assign_match_deck(LOG, &deck.id).unwrap();
         }
     }
 
@@ -350,6 +466,98 @@ mod tests {
         assert_eq!(json["playerName"], "ash");
         assert_eq!(json["appVersion"], "1.2.3");
         assert!(DateTime::parse_from_rfc3339(json["savedAt"].as_str().unwrap()).is_ok());
+    }
+
+    #[test]
+    fn deck_identity_is_off_by_default_even_with_a_snapshot() {
+        let rig = Rig::new("deck-off");
+        rig.seed_deck(Some("TEF-30C"));
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        assert!(!body.contains("\"deck\""));
+    }
+
+    #[test]
+    fn deck_identity_is_sent_when_the_destination_opts_in() {
+        let rig = Rig::new("deck-on");
+        rig.seed_deck(Some("TEF-30C"));
+        rig.enable_deck_identity();
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(json["deck"]["format"], "TEF-30C");
+        assert_eq!(json["deck"]["decklist"], "Trainer: 4\n4 Ultra Ball SVI 196\n\nTotal Cards: 4\n");
+        assert_eq!(json["deck"]["archetype"]["id"], "limitless:test");
+        assert_eq!(json["deck"]["archetype"]["cards"], serde_json::json!(["ultra-ball"]));
+        assert_eq!(json["deck"]["opponentArchetype"], serde_json::Value::Null);
+        assert_eq!(json["deck"]["identity"]["deckId"], "sha256:deck");
+        assert_eq!(json["deck"]["identity"]["listId"], "sha256:list");
+        assert_eq!(json["deck"]["identity"]["hashVersion"], 1);
+    }
+
+    #[test]
+    fn a_metadata_only_deck_sends_an_empty_decklist() {
+        let rig = Rig::new("deck-metadata");
+        rig.seed_metadata_deck("TEF-30C");
+        rig.enable_deck_identity();
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(json["deck"]["decklist"], "");
+        assert_eq!(json["deck"]["format"], "TEF-30C");
+        assert_eq!(json["deck"]["archetype"]["label"], "Custom");
+        assert_eq!(json["deck"]["archetype"]["id"], serde_json::Value::Null);
+        assert_eq!(json["deck"]["archetype"]["cards"], serde_json::json!(["dragapult"]));
+        assert_eq!(json["deck"]["identity"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn a_deck_without_a_confirmed_format_is_not_sent() {
+        let rig = Rig::new("deck-no-format");
+        rig.seed_deck(None);
+        rig.enable_deck_identity();
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        assert!(!body.contains("\"deck\""));
+    }
+
+    #[test]
+    fn deck_identity_on_without_a_snapshot_sends_the_base_envelope() {
+        let rig = Rig::new("deck-missing");
+        rig.enable_deck_identity();
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        assert!(!body.contains("\"deck\""));
+    }
+
+    #[test]
+    fn a_destination_rejecting_the_deck_payload_fails_only_that_delivery() {
+        let rig = Rig::new("deck-rejected");
+        rig.seed_deck(Some("TEF-30C"));
+        rig.enable_deck_identity();
+        rig.respond(Ok(422));
+        rig.enqueue(Release::Now);
+        rig.worker.tick(0);
+        assert_eq!(rig.state(), Some(DeliveryState::Failed));
+        assert!(rig.dir.join(LOG).exists(), "the local log stays");
+    }
+
+    #[test]
+    fn a_deck_store_failure_falls_back_to_the_base_envelope() {
+        let mut rig = Rig::new("deck-unavailable");
+        rig.worker.decks = Arc::new(Mutex::new(DeckStore::open_in_memory().unwrap()));
+        rig.enable_deck_identity();
+        rig.enqueue(Release::Now);
+        rig.respond(Ok(200));
+        rig.worker.tick(0);
+        assert_eq!(rig.state(), Some(DeliveryState::Synced));
+        let body = rig.transport.sent.lock().unwrap()[0].2.clone();
+        assert!(!body.contains("\"deck\""));
     }
 
     #[test]

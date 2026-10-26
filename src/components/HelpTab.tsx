@@ -62,6 +62,15 @@ export function HelpTab({ history, state }: { history: CaptureStatusEvent[]; sta
         </p>
       </section>
 
+      <section className="space-y-1">
+        <h3 className="text-sm font-semibold text-foreground">Decks</h3>
+        <p className="text-sm text-muted-foreground">
+          Paste a list in the Decks tab and choose an active deck. New saves snapshot its current
+          version; editing the deck later does not change old matches. Choose No deck to save
+          without one. Sending a decklist to a destination is opt-in per destination in Settings.
+        </p>
+      </section>
+
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-foreground">Recent activity</h3>
         {lines.length === 0 ? (

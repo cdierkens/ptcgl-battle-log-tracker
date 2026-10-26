@@ -1,5 +1,7 @@
 import type { SubmitOutcome } from "./tauri";
 
+import { isBlank } from "./decklist-text";
+
 export type PasteAction =
   | { message: string; type: "failed" }
   | { text: string; type: "edit" }
@@ -28,10 +30,7 @@ export function actionForOutcome(outcome: SubmitOutcome, matchState: null | stri
   return { message: ALREADY_SAVED_MESSAGE, type: "failed" };
 }
 
-export function isBlank(text: string): boolean {
-  return text.trim() === "";
-}
-
+export { isBlank };
 export function pasteReducer(model: PasteModel, action: PasteAction): PasteModel {
   switch (action.type) {
     case "edit":

@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use serde::{Serialize, Serializer};
 
+use crate::deck_store::{self, SharedDeckStore};
 use crate::dedupe::SeenHashes;
 use crate::delivery_queue::{self, Release, SharedQueue};
 use crate::gate::looks_like_battle_log;
@@ -71,6 +72,44 @@ impl<S: LogStore + Send + Sync> LogSink for StoreLogSink<S> {
         if let Ok(mut seen) = self.seen.lock() {
             seen.forget(text.trim());
         }
+    }
+}
+
+/// Snapshots the active deck onto each newly saved log. The deck database is
+/// optional metadata: a failure is logged and the save still succeeds. This
+/// sits inside `SyncingLogSink` so the snapshot exists before delivery is queued.
+pub struct DeckAssociatingSink<S: LogSink> {
+    inner: S,
+    store: SharedDeckStore,
+}
+
+impl<S: LogSink> DeckAssociatingSink<S> {
+    pub fn new(inner: S, store: SharedDeckStore) -> Self {
+        Self { inner, store }
+    }
+
+    fn associate(&self, path: &str) {
+        let file_name = match logs::file_name_of(path) {
+            Ok(name) => name,
+            Err(error) => return tracing::warn!("deck: {error}"),
+        };
+        if let Err(error) = deck_store::lock(&self.store).assign_active_match(&file_name) {
+            tracing::warn!("deck: couldn't associate {file_name}: {error}");
+        }
+    }
+}
+
+impl<S: LogSink> LogSink for DeckAssociatingSink<S> {
+    fn submit(&self, text: &str) -> Result<SubmitOutcome, SubmitError> {
+        let outcome = self.inner.submit(text)?;
+        if let SubmitOutcome::Saved { path } = &outcome {
+            self.associate(path);
+        }
+        Ok(outcome)
+    }
+
+    fn forget(&self, text: &str) {
+        self.inner.forget(text);
     }
 }
 
@@ -196,6 +235,56 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_log_gets_a_snapshot_of_the_active_deck() {
+        use std::sync::Arc;
+
+        use crate::deck_store::{DeckStore, SaveDeckInput};
+
+        let dir = std::env::temp_dir().join(format!("ptcgl-sink-deck-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = DeckStore::open(&dir.join("decks.sqlite")).unwrap();
+        let deck = store
+            .save(SaveDeckInput {
+                id: None,
+                name: "League deck".into(),
+                source: "ptcgl".into(),
+                raw_text: "4 Ultra Ball SVI 196".into(),
+                decklist_text: "Trainer: 4\n4 Ultra Ball SVI 196\n\nTotal Cards: 4\n".into(),
+                format_label: Some("TEF-30C".into()),
+                archetype: None,
+                deck_id_hash: Some("sha256:deck".into()),
+                list_id_hash: Some("sha256:list".into()),
+                hash_version: Some(1),
+                catalog_version: Some("2026-10-23".into()),
+                catalog_context_id: Some("catalog:test".into()),
+            })
+            .unwrap();
+        store.set_active_deck(Some(&deck.id)).unwrap();
+        let shared = Arc::new(Mutex::new(store));
+
+        let sink = DeckAssociatingSink::new(StoreLogSink::new(MemStore::default()), shared.clone());
+        let SubmitOutcome::Saved { path } = sink.submit(LOG).unwrap() else { panic!("expected a save") };
+        let file_name = logs::file_name_of(&path).unwrap();
+        let snapshot = deck_store::lock(&shared).match_deck(&file_name).unwrap().unwrap();
+
+        assert_eq!(snapshot.deck_id, deck.id);
+        assert_eq!(snapshot.deck_version_id, deck.current_version.id);
+        assert_eq!(snapshot.format_label.as_deref(), Some("TEF-30C"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_unavailable_deck_store_does_not_fail_the_save() {
+        use std::sync::Arc;
+
+        use crate::deck_store::DeckStore;
+
+        let shared = Arc::new(Mutex::new(DeckStore::open_in_memory().unwrap()));
+        let sink = DeckAssociatingSink::new(StoreLogSink::new(MemStore::default()), shared);
+        assert!(matches!(sink.submit(LOG), Ok(SubmitOutcome::Saved { .. })));
+    }
+
+    #[test]
     fn serializes_for_the_ui() {
         assert_eq!(
             serde_json::to_value(SubmitOutcome::Saved { path: "/x".into() }).unwrap(),
@@ -230,6 +319,7 @@ mod tests {
                 headers: BTreeMap::new(),
                 token_url: None,
                 enabled,
+                send_deck_identity: false,
             }
         }
 

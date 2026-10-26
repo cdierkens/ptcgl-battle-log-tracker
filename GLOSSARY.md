@@ -79,6 +79,107 @@ One saved log as the player sees it in the list: result, prizes, and opponent, w
 log can be analysed.
 _Avoid_: game (ambiguous with PTCG Live), row
 
+### Decks
+
+**Deck library**:
+The player-supplied decklists the app keeps in its own app data. The app never reads a
+decklist from PTCG Live.
+_Avoid_: collection, inventory, deck box
+
+**Deck version**:
+One immutable row in the deck library. Editing a deck adds a version instead of changing
+an old one.
+_Avoid_: revision, edit, history entry
+
+**Active deck**:
+The one deck that new saved logs snapshot. The player can switch it or choose **No deck**.
+_Avoid_: current deck, selected deck, default deck
+
+**Deck snapshot**:
+The immutable copy of a deck version attached to one saved log. Later edits do not change
+it.
+_Avoid_: assignment, deck link, match deck (internal only)
+
+**Portable decklist**:
+The PTCGL-rendered text of a deck snapshot or deck version. Destinations receive it; the
+original pasted text stays local.
+_Avoid_: export, list text, deck string
+
+**Archetype**:
+A player-confirmed label plus zero to two Pokémon species. The label is what people
+read; the species are the identities Training Court renders. Catalog archetypes carry
+a stable id; custom ones do not.
+_Avoid_: deck type, deck name
+
+**Custom archetype**:
+An archetype whose label or Pokémon were edited away from a catalog entry. It has no
+catalog id.
+_Avoid_: manual archetype, user archetype
+
+**Metadata-only deck**:
+A deck version with no decklist, identified by a format and optionally an archetype.
+Used when the player wants match identity before pasting a list.
+_Avoid_: empty deck, listless deck, header-only deck
+
+**Deck source**:
+How a deck version was supplied: a paste, a typed list, or metadata only. It is
+provenance, not something parsing depends on.
+_Avoid_: origin, input mode
+
+### Reconstruction
+
+**Board reconstruction**:
+Turning a battle log into a turn-by-turn picture of both sides' in-play Pokémon.
+It is not a replay of the game and not a simulation of it.
+_Avoid_: replay, simulation, state machine, game state
+
+**Board**:
+Both sides' Active Spot and Bench, with each Pokémon's damage and attachments, at
+one prefix. The rest of the game — hand, deck, discard, Stadium, Prized cards —
+appears only as counts.
+_Avoid_: game state, snapshot (except as the wire artefact), frame
+
+**Prefix**:
+A point in a battle log that a board is reconstructed at: phase, turn, and content
+line.
+_Avoid_: step, timestamp, tick
+
+**Identity group**:
+Pokémon on one side that the battle log cannot tell apart, because it names cards
+and never instances. Damage lands on the group until something splits it.
+_Avoid_: candidate set, ambiguity cluster, duplicate pile
+
+**Whole**:
+A prefix with exactly one surviving board. A *divergent* prefix can still be
+whole-looking; the two are not the same claim (see **Confirmed**).
+_Avoid_: confirmed, resolved, definite
+
+**Divergent**:
+A prefix with two or more boards that every remaining line of the log is
+consistent with.
+_Avoid_: ambiguous (as a noun), unknown, uncertain
+
+**Confirmed**:
+A prefix whose surviving boards all render identically, even if there is more than
+one of them. This is the figure the corpus audit reports, because it is what a
+viewer can see.
+_Avoid_: whole, certain, settled
+
+**Unexecutable**:
+A prefix where no board survives the log's own constraints. A defect in the
+lowering, the rules, or the client version — never a form of ambiguity.
+_Avoid_: invalid, broken, failed
+
+**Lowering**:
+Mapping the parser's template events into a locale-free, typed event language that
+the reconstruction reads. The parser is lexer and parser; this is the pass above
+it.
+_Avoid_: lexer, desugaring, normaliser
+
+**Record**:
+The canonical lowered event stream for one battle log.
+_Avoid_: event log, trace, transcript
+
 ### Platform
 
 **Platform port**:

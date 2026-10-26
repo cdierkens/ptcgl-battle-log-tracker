@@ -6,7 +6,9 @@ only reads the screen. It never clicks, types, or reads game memory
 ([ADR 0001](docs/adr/0001-no-game-automation.md)).
 
 Tauri 2 (Rust) + React, shadcn/ui on Tailwind v4. Battle logs are parsed with
-[`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser).
+[`@dierkens.dev/ptcgl-battle-log-parser`](https://www.npmjs.com/package/@dierkens.dev/ptcgl-battle-log-parser);
+decklists you paste into the deck library are parsed with
+[`@dierkens.dev/ptcg-decklist-tools`](https://www.npmjs.com/package/@dierkens.dev/ptcg-decklist-tools).
 macOS and Windows. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
 ### Demo
@@ -21,15 +23,15 @@ Download the latest release from [GitHub Releases](https://github.com/cdierkens/
 
 ### macOS
 
-- **PTCGL.Tracker_0.2.0_aarch64.dmg** — disk image, drag to Applications
-- **PTCGL.Tracker_0.2.0_aarch64.app.zip** — zipped app bundle
+- **PTCGL.Tracker_0.4.0_aarch64.dmg** — disk image, drag to Applications
+- **PTCGL.Tracker_0.4.0_aarch64.app.zip** — zipped app bundle
 
-On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog.
+On first launch, macOS Gatekeeper will block it (unidentified developer). Right-click the app → **Open**, then click **Open** in the dialog. If macOS says the app is **damaged**, download the latest release; v0.3.0 and older are not signed.
 
 ### Windows
 
-- **PTCGL.Tracker_0.2.0_x64_en-US.msi** — WiX installer
-- **PTCGL.Tracker_0.2.0_x64-setup.exe** — NSIS installer
+- **PTCGL.Tracker_0.4.0_x64_en-US.msi** — WiX installer
+- **PTCGL.Tracker_0.4.0_x64-setup.exe** — NSIS installer
 
 SmartScreen flags the unsigned installer — choose **More info** → **Run anyway**.
 
@@ -70,6 +72,10 @@ prints into Settings → Sync. Only debug builds accept its `http://localhost` U
 - **Settings:** the OS app-config folder, e.g.
   `~/Library/Application Support/dev.dierkens.ptcgl-tracker/settings.json`.
   Delete it to rerun first-run setup.
+- **Deck library:** `decks.sqlite` in the OS app-data folder. It holds
+  player-supplied decklists, immutable versions, and per-match snapshots; it is
+  never written into the log folder. Sending a decklist to a destination is a
+  separate per-destination opt-in in Settings.
 
 See [ADR 0002](docs/adr/0002-log-folder-in-home-settings-in-app-config.md).
 

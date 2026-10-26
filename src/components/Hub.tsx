@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { StatusAlert } from "@/components/StatusAlert";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import type { CaptureStatusEvent } from "../lib/tauri";
 import { chipForState, isResultsState, matchNeedsPaste } from "../lib/capture-status";
 import { needsAttention } from "../lib/status-history";
 import { syncNeedsAttention } from "../lib/sync-status";
+import { useDecks } from "../lib/use-decks";
 import { useMatches } from "../lib/use-matches";
 import { useOverlayState } from "../lib/use-overlay-state";
 import { useSettings } from "../lib/use-settings";
@@ -34,10 +35,12 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
   const overlay = useOverlayState();
   const settings = useSettings();
   const playerName = settings.settings?.player_name ?? "";
+  const decks = useDecks();
   const matches = useMatches(playerName);
   const sync = useSyncStatus();
   const destinations = settings.settings?.destinations ?? [];
   const chip = overlay.state === null ? null : chipForState(overlay.state);
+  const [tab, setTab] = useState("matches");
   const attention = needsAttention(history);
   const errors = [overlay.error, settings.error, historyError, sync.error].filter((e): e is string => e !== null);
 
@@ -48,11 +51,11 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
           <h1 className="text-sm font-semibold">Battle Log Capture</h1>
           {chip !== null ? <Badge variant={chip.variant}>{chip.label}</Badge> : null}
         </div>
-        {onClose !== undefined ? (
+        {onClose === undefined ? null : (
           <Button aria-label="Close drawer" onClick={onClose} size="sm" variant="ghost">
             Close
           </Button>
-        ) : null}
+        )}
       </header>
       {errors.map((message) => (
         <StatusAlert className="m-3" key={message} tone="critical">
@@ -68,10 +71,10 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
           playerName={playerName}
         />
       ) : null}
-      <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="matches">
+      <Tabs className="flex min-h-0 flex-1 flex-col" onValueChange={setTab} value={tab}>
         <TabsList aria-label="Sections" className="mx-4 mt-2" variant="line">
           <TabsTrigger value="matches">Matches</TabsTrigger>
-          {onClose === undefined ? <TabsTrigger value="decks">Decks</TabsTrigger> : null}
+          <TabsTrigger value="decks">Decks</TabsTrigger>
           <TabsTrigger value="settings">
             Settings
             {syncNeedsAttention(sync.status, destinations) ? <AttentionDot /> : null}
@@ -87,15 +90,20 @@ export function Hub({ focusPaste = false, history, historyError = null, onClose 
               <PasteForm matchState={null} onSaved={matches.refresh} />
             </section>
           )}
-          <MatchList destinations={destinations} matches={matches} playerName={playerName} sync={sync.status} />
+          <MatchList
+            decks={decks}
+            destinations={destinations}
+            matches={matches}
+            onOpenDecks={() => setTab("decks")}
+            playerName={playerName}
+            sync={sync.status}
+          />
         </TabsContent>
-        {onClose === undefined ? (
-          <TabsContent className="min-h-0 overflow-y-auto" value="decks">
-            <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading decks…</p>}>
-              <DecksTab />
-            </Suspense>
-          </TabsContent>
-        ) : null}
+        <TabsContent className="min-h-0 overflow-y-auto" value="decks">
+          <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading decks…</p>}>
+            <DecksTab />
+          </Suspense>
+        </TabsContent>
         <TabsContent className="min-h-0 overflow-y-auto" value="settings">
           <SettingsTab settings={settings} sync={sync.status} />
         </TabsContent>

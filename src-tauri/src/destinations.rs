@@ -24,6 +24,9 @@ pub struct Destination {
     #[serde(default)]
     pub token_url: Option<String>,
     pub enabled: bool,
+    /// Send the match's deck snapshot in the envelope. Opt-in, default off.
+    #[serde(default)]
+    pub send_deck_identity: bool,
 }
 
 /// A validated destination config, not yet saved.
@@ -250,6 +253,7 @@ pub fn import(
         queue.clear_attention(&id)?;
     }
     let enabled = existing.map(|i| destinations[i].enabled).unwrap_or(true);
+    let send_deck_identity = existing.map(|i| destinations[i].send_deck_identity).unwrap_or(false);
     let next = Destination {
         id: id.clone(),
         name: config.name,
@@ -257,6 +261,7 @@ pub fn import(
         headers: config.headers,
         token_url: config.token_url,
         enabled,
+        send_deck_identity,
     };
     match existing {
         Some(i) => destinations[i] = next,
@@ -284,9 +289,21 @@ pub fn replace_token(
 }
 
 pub fn set_enabled(destinations: &mut [Destination], id: &str, enabled: bool) -> Result<(), DestinationError> {
-    let destination = destinations.iter_mut().find(|d| d.id == id).ok_or(DestinationError::NotFound)?;
-    destination.enabled = enabled;
+    find_mut(destinations, id)?.enabled = enabled;
     Ok(())
+}
+
+pub fn set_send_deck_identity(
+    destinations: &mut [Destination],
+    id: &str,
+    enabled: bool,
+) -> Result<(), DestinationError> {
+    find_mut(destinations, id)?.send_deck_identity = enabled;
+    Ok(())
+}
+
+fn find_mut<'a>(destinations: &'a mut [Destination], id: &str) -> Result<&'a mut Destination, DestinationError> {
+    destinations.iter_mut().find(|d| d.id == id).ok_or(DestinationError::NotFound)
 }
 
 pub fn remove(destinations: &mut Vec<Destination>, id: &str) -> Result<(), DestinationError> {
@@ -450,6 +467,7 @@ mod tests {
         assert_eq!(secrets.get(&id).unwrap().as_deref(), Some("pdj_abc"));
         assert_eq!(dests.len(), 1);
         assert!(dests[0].enabled);
+        assert!(!dests[0].send_deck_identity);
         assert!(!serde_json::to_string(&dests).unwrap().contains("pdj_abc"));
     }
 
@@ -488,6 +506,15 @@ mod tests {
         assert_eq!(secrets.get(&id).unwrap().as_deref(), Some("pdj_new"));
         assert!(queue.needing_attention().unwrap().is_empty(), "a new token un-pauses");
         assert_eq!(queue.for_log("a.txt").unwrap().len(), 1, "keeps its deliveries");
+    }
+
+    #[test]
+    fn repasting_keeps_the_deck_identity_choice() {
+        let (mut dests, secrets, queue) = setup();
+        let id = import(&mut dests, &secrets, &queue, parse_config(POKEDOJO).unwrap(), None).unwrap();
+        set_send_deck_identity(&mut dests, &id, true).unwrap();
+        import(&mut dests, &secrets, &queue, parse_config(POKEDOJO).unwrap(), None).unwrap();
+        assert!(dests[0].send_deck_identity);
     }
 
     #[test]
@@ -548,6 +575,15 @@ mod tests {
         assert!(queue.needing_attention().unwrap().is_empty());
         assert!(matches!(replace_token(&dests, &secrets, &queue, "gone", "t"), Err(DestinationError::NotFound)));
         assert_eq!(secrets.get("gone").unwrap(), None);
+    }
+
+    #[test]
+    fn old_destination_json_defaults_deck_identity_off() {
+        let d: Destination = serde_json::from_str(
+            r#"{"id":"dest-1","name":"Dojo","url":"https://dojo.example/","headers":{},"token_url":null,"enabled":true}"#,
+        )
+        .unwrap();
+        assert!(!d.send_deck_identity);
     }
 
     #[test]

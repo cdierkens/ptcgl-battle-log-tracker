@@ -27,13 +27,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import type { Destination, SyncStatus } from "../lib/tauri";
+import type { Destination, MatchDeck, SyncStatus } from "../lib/tauri";
+import type { DecksView } from "../lib/use-decks";
 import type { Match, MatchesView } from "../lib/use-matches";
 
 import { matchRow, type MatchRow } from "../lib/match-row";
 import { type MatchSync, matchSyncs, type MatchSyncState, syncActions } from "../lib/sync-status";
 import { deleteLog, revealLog, syncLog } from "../lib/tauri";
 import { useNow } from "../lib/use-now";
+import { MatchDeckPanel } from "./MatchDeckPanel";
 
 const RESULT_VARIANT = { "—": "secondary", L: "destructive", W: "default" } as const;
 
@@ -46,21 +48,27 @@ const SYNC_LOOK: Record<MatchSyncState, { icon: LucideIcon; label: string }> = {
 
 interface MatchDetailProps {
   actions: ReactNode;
+  deckError: null | string;
+  decks: DecksView;
   destinations: Destination[];
   match: Match;
   onBack: () => void;
+  onDeckChanged: () => void;
+  onOpenDecks?: () => void;
   row: MatchRow;
   sync: null | SyncStatus;
 }
 
 interface MatchListProps {
+  decks: DecksView;
   destinations: Destination[];
   matches: MatchesView;
+  onOpenDecks?: () => void;
   playerName: string;
   sync: null | SyncStatus;
 }
 
-export function MatchList({ destinations, matches, playerName, sync }: MatchListProps) {
+export function MatchList({ decks, destinations, matches, onOpenDecks, playerName, sync }: MatchListProps) {
   const [selected, setSelected] = useState<null | string>(null);
   const [pendingDelete, setPendingDelete] = useState<Match | null>(null);
   const [actionError, setActionError] = useState<null | string>(null);
@@ -170,9 +178,13 @@ export function MatchList({ destinations, matches, playerName, sync }: MatchList
       <>
         <MatchDetail
           actions={actions(detail)}
+          deckError={matches.deckError}
+          decks={decks}
           destinations={destinations}
           match={detail}
           onBack={() => setSelected(null)}
+          onDeckChanged={matches.refresh}
+          onOpenDecks={onOpenDecks}
           row={matchRow(detail.log, detail.analysis, now)}
           sync={sync}
         />
@@ -202,6 +214,11 @@ export function MatchList({ destinations, matches, playerName, sync }: MatchList
         <StatusAlert tone="info">Add your player name in Settings to see wins and losses.</StatusAlert>
       ) : null}
       {actionError !== null ? <StatusAlert tone="critical">{actionError}</StatusAlert> : null}
+      {matches.deckError !== null ? (
+        <StatusAlert tone="info">
+          Deck snapshots are unavailable. Your saved Battle Logs are unaffected: {matches.deckError}
+        </StatusAlert>
+      ) : null}
       {matches.error !== null ? <StatusAlert tone="critical">{matches.error}</StatusAlert> : null}
       <ul className="divide-y divide-border rounded-md border border-border">
         {matches.matches.map((match) => {
@@ -213,7 +230,7 @@ export function MatchList({ destinations, matches, playerName, sync }: MatchList
                 onClick={() => setSelected(row.fileName)}
                 variant="ghost"
               >
-                <RowContent row={row} />
+                <RowContent deck={match.deck} row={row} />
                 {matchSyncs(sync, row.fileName, destinations).map((s) => (
                   <RowSyncIcon key={s.destination.id} label={syncLabel(s)} state={s.state} />
                 ))}
@@ -228,7 +245,18 @@ export function MatchList({ destinations, matches, playerName, sync }: MatchList
   );
 }
 
-function MatchDetail({ actions, destinations, match, onBack, row, sync }: MatchDetailProps) {
+function MatchDetail({
+  actions,
+  deckError,
+  decks,
+  destinations,
+  match,
+  onBack,
+  onDeckChanged,
+  onOpenDecks,
+  row,
+  sync,
+}: MatchDetailProps) {
   const [showRaw, setShowRaw] = useState(false);
   const syncs = matchSyncs(sync, row.fileName, destinations);
   const summary = match.analysis?.summary;
@@ -241,8 +269,12 @@ function MatchDetail({ actions, destinations, match, onBack, row, sync }: MatchD
         {actions}
       </div>
       <div className="flex items-center gap-3">
-        <RowContent row={row} />
+        <RowContent deck={match.deck} row={row} />
       </div>
+      {deckError !== null ? (
+        <StatusAlert tone="info">Deck snapshots are unavailable: {deckError}</StatusAlert>
+      ) : null}
+      <MatchDeckPanel decks={decks} match={match} onChanged={onDeckChanged} onOpenDecks={onOpenDecks} />
       {summary === undefined ? (
         <p className="text-sm text-muted-foreground">This Battle Log couldn't be summarized.</p>
       ) : (
@@ -284,7 +316,7 @@ function MatchDetail({ actions, destinations, match, onBack, row, sync }: MatchD
   );
 }
 
-function RowContent({ row }: { row: MatchRow }) {
+function RowContent({ deck, row }: { deck: MatchDeck | null; row: MatchRow }) {
   return (
     <>
       <Badge className="w-7 shrink-0 justify-center" variant={row.result === null ? "outline" : RESULT_VARIANT[row.result]}>
@@ -292,6 +324,7 @@ function RowContent({ row }: { row: MatchRow }) {
       </Badge>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-foreground">{row.title}</span>
+        <span className="block truncate text-xs text-muted-foreground">{deck?.deckName ?? "Deck not set"}</span>
         <span className="block text-xs text-muted-foreground">
           {row.prizes === null ? row.when : `Prizes ${row.prizes} · ${row.when}`}
         </span>

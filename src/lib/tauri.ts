@@ -28,6 +28,8 @@ export interface Deck {
   updatedAt: number;
 }
 
+export type DeckSource = "limitless" | "metadata" | "ptcgl" | "typed";
+
 export interface DeckVersion {
   archetype: ArchetypeRef | null;
   catalogContextId: null | string;
@@ -40,7 +42,7 @@ export interface DeckVersion {
   id: string;
   listIdHash: null | string;
   rawText: string;
-  source: string;
+  source: DeckSource;
 }
 
 /** One delivery of a saved log to a destination. Held deliveries read as pending. */
@@ -51,15 +53,16 @@ export interface DeliveryStatus {
   log: string;
   state: SyncState;
 }
+
 export interface Destination {
   enabled: boolean;
   headers: Record<string, string>;
   id: string;
   name: string;
+  send_deck_identity: boolean;
   token_url: null | string;
   url: string;
 }
-
 /** The confirmation step for a pasted destination config. */
 export interface ImportPreview {
   name: string;
@@ -74,6 +77,25 @@ export interface LogSummary {
   createdMs: number;
   fileName: string;
   sizeBytes: number;
+}
+
+/** The immutable deck snapshot attached to one saved log. */
+export interface MatchDeck {
+  archetype: ArchetypeRef | null;
+  catalogContextId: null | string;
+  catalogVersion: null | string;
+  createdAt: number;
+  deckId: string;
+  deckIdHash: null | string;
+  decklistText: string;
+  deckName: string;
+  deckVersionId: string;
+  formatLabel: null | string;
+  hashVersion: null | number;
+  listIdHash: null | string;
+  logFileName: string;
+  opponentArchetype: ArchetypeRef | null;
+  updatedAt: number;
 }
 
 export interface OverlayStateEvent {
@@ -94,7 +116,7 @@ export interface SaveDeckInput {
   listIdHash: null | string;
   name: string;
   rawText: string;
-  source: string;
+  source: Exclude<DeckSource, "limitless">;
 }
 
 export interface Settings {
@@ -118,6 +140,7 @@ export interface SyncStatus {
 /** `embedded`: the config has a token. `optional`: blank keeps the current token. */
 export type TokenPrompt = "embedded" | "optional" | "required";
 
+export const DECKS_CHANGED_EVENT = "decks://changed";
 export const OVERLAY_STATE_EVENT = "overlay://state";
 export const SETTINGS_CHANGED_EVENT = "settings://changed";
 export const SYNC_CHANGED_EVENT = "sync://changed";
@@ -129,6 +152,13 @@ export const readLog = (fileName: string) => invoke<string>("read_log", { fileNa
 export const listDecks = () => invoke<Deck[]>("list_decks");
 export const saveDeck = (input: SaveDeckInput) => invoke<Deck>("save_deck", { input });
 export const archiveDeck = (id: string) => invoke<void>("archive_deck", { id });
+export const getActiveDeck = () => invoke<Deck | null>("get_active_deck");
+export const setActiveDeck = (id: null | string) => invoke<void>("set_active_deck", { id });
+export const listMatchDecks = () => invoke<MatchDeck[]>("list_match_decks");
+export const getMatchDeck = (fileName: string) => invoke<MatchDeck | null>("get_match_deck", { fileName });
+export const assignMatchDeck = (fileName: string, deckId: string) =>
+  invoke<MatchDeck>("assign_match_deck", { deckId, fileName });
+export const clearMatchDeck = (fileName: string) => invoke<void>("clear_match_deck", { fileName });
 
 export const getCaptureState = () => invoke<string>("get_capture_state");
 export const submitBattleLog = (text: string) => invoke<SubmitOutcome>("submit_battle_log", { text });
@@ -152,6 +182,8 @@ export const importDestination = (config: string, token: null | string) =>
   invoke<void>("import_destination", { config, token });
 export const setDestinationEnabled = (id: string, enabled: boolean) =>
   invoke<void>("set_destination_enabled", { enabled, id });
+export const setDestinationDeckIdentity = (id: string, enabled: boolean) =>
+  invoke<void>("set_destination_deck_identity", { enabled, id });
 export const removeDestination = (id: string) => invoke<void>("remove_destination", { id });
 export const openTokenPage = (config: string) => invoke<void>("open_token_page", { config });
 export const openDestinationTokenPage = (id: string) => invoke<void>("open_destination_token_page", { id });

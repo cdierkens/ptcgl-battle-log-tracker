@@ -39,7 +39,7 @@ pub fn run() {
     use crate::platform::store::FsLogStore;
     use crate::ports::{OverlayPresenter, ScreenCaptureAccess, SecretStore};
     use crate::settings::{SettingsPaths, SharedSettings};
-    use crate::sink::{LogSink, StoreLogSink, SyncingLogSink};
+    use crate::sink::{DeckAssociatingSink, LogSink, StoreLogSink, SyncingLogSink};
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -67,6 +67,7 @@ pub fn run() {
             commands::preview_destination,
             commands::import_destination,
             commands::set_destination_enabled,
+            commands::set_destination_deck_identity,
             commands::remove_destination,
             commands::open_token_page,
             commands::open_destination_token_page,
@@ -77,6 +78,12 @@ pub fn run() {
             commands::list_decks,
             commands::save_deck,
             commands::archive_deck,
+            commands::get_active_deck,
+            commands::set_active_deck,
+            commands::list_match_decks,
+            commands::get_match_deck,
+            commands::assign_match_deck,
+            commands::clear_match_deck,
         ])
         // The drawer is the everyday UI; closing the main window only hides it (⌘Q quits).
         .on_window_event(|window, event| {
@@ -108,7 +115,7 @@ pub fn run() {
             })?;
             let deck_store: deck_store::SharedDeckStore = Arc::new(Mutex::new(deck_store));
             let sink: Arc<dyn LogSink> = Arc::new(SyncingLogSink::new(
-                StoreLogSink::new(FsLogStore::new(shared.clone())),
+                DeckAssociatingSink::new(StoreLogSink::new(FsLogStore::new(shared.clone())), deck_store.clone()),
                 shared.clone(),
                 queue.clone(),
                 results_up(state_cell.clone()),
@@ -121,7 +128,7 @@ pub fn run() {
             app.manage(shared.clone());
             app.manage(secrets.clone());
             app.manage(queue.clone());
-            app.manage(deck_store);
+            app.manage(deck_store.clone());
             app.manage(sink.clone());
             app.manage(events);
 
@@ -131,7 +138,7 @@ pub fn run() {
             if first_run || !ScreenRecordingAccess.is_authorized() {
                 show_main(app.handle());
             }
-            spawn_sync_worker(app.handle(), queue, shared.clone(), secrets, results_up(state_cell.clone()));
+            spawn_sync_worker(app.handle(), queue, shared.clone(), deck_store, secrets, results_up(state_cell.clone()));
             let handle = app.handle().clone();
             std::thread::spawn(move || engine::run(handle, state_cell, presenter, inbox, shared, sink));
             Ok(())
@@ -163,6 +170,7 @@ fn spawn_sync_worker(
     app: &tauri::AppHandle,
     queue: delivery_queue::SharedQueue,
     settings: settings::SharedSettings,
+    decks: deck_store::SharedDeckStore,
     secrets: std::sync::Arc<dyn ports::SecretStore>,
     results_up: sink::ResultsUp,
 ) {
@@ -178,8 +186,18 @@ fn spawn_sync_worker(
         let on_change = sync_changed(&app);
         let transport = Box::new(transport);
         let token_cache = Arc::new(std::sync::RwLock::new(HashMap::new()));
-        sync_worker::Worker { queue, settings, secrets, transport, results_up, app_version, on_change, token_cache }
-            .run()
+        sync_worker::Worker {
+            queue,
+            settings,
+            decks,
+            secrets,
+            transport,
+            results_up,
+            app_version,
+            on_change,
+            token_cache,
+        }
+        .run()
     });
 }
 
@@ -196,7 +214,7 @@ fn open_queue(app: &tauri::AppHandle) -> Result<delivery_queue::DeliveryQueue, d
     })
 }
 
-fn show_main(app: &tauri::AppHandle) {
+pub(crate) fn show_main(app: &tauri::AppHandle) {
     use tauri::Manager;
 
     if let Some(main) = app.get_webview_window("main") {
