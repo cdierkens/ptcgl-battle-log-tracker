@@ -36,6 +36,13 @@ export type DeckPreviewResult =
   | { errors: string[]; ok: false; }
   | { ok: true; preview: DeckPreview };
 
+export type DeckDraftAnalysis =
+  | { kind: "empty" }
+  | { errors: string[]; kind: "invalid" }
+  | { kind: "valid"; preview: DeckPreview };
+
+export type DetectedDeckSource = "metadata" | "ptcgl" | "typed";
+
 const CATALOG = catalog;
 
 /** Parse, normalise, render, and read the projections the deck editor needs. Never throws. */
@@ -63,11 +70,20 @@ export function analyzeDecklist(text: string): DeckPreviewResult {
   };
 }
 
+/** Wrap the parser for the form: blank is a valid no-list state, not an error. */
+export function analyzeDeckDraft(text: string): DeckDraftAnalysis {
+  if (text.trim() === "") return { kind: "empty" };
+  const result = analyzeDecklist(text);
+  return result.ok ? { kind: "valid", preview: result.preview } : { errors: result.errors, kind: "invalid" };
+}
+
 /**
  * Provenance only; parsing accepts any of these shapes. Section headers plus a
  * Total Cards line identify a PTCGL/Limitless export; anything else is typed.
+ * Blank text means the deck has no list, not that it was typed.
  */
-export function deckSource(text: string): "ptcgl" | "typed" {
+export function deckSource(text: string): DetectedDeckSource {
+  if (text.trim() === "") return "metadata";
   const sections = /^\s*(Pokémon|Pokemon|Trainer|Energy)\s*:\s*\d+/m.test(text);
   const total = /^\s*Total Cards\s*:\s*\d+/im.test(text);
   return sections && total ? "ptcgl" : "typed";
