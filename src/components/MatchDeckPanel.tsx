@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { DecksView } from "../lib/use-decks";
 import type { Match } from "../lib/use-matches";
 
+import { hasDecklistText } from "../lib/decklist-text";
 import { SELECT_CLASS } from "../lib/form-styles";
 import { assignMatchDeck, clearMatchDeck } from "../lib/tauri";
 import { DeckOptions } from "./DeckOptions";
@@ -30,7 +31,7 @@ export function MatchDeckPanel({ decks, match, onChanged, onOpenDecks }: MatchDe
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<null | string>(null);
   const snapshot = match.deck;
-  const hasDecklist = snapshot !== null && snapshot.decklistText.trim() !== "";
+  const hasDecklist = snapshot !== null && hasDecklistText(snapshot.decklistText);
 
   const startEditing = () => {
     const available = decks.decks;

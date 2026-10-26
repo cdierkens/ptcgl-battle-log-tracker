@@ -3,7 +3,7 @@ import type { ArchetypeSuggestion, CatalogArchetype } from "@dierkens.dev/ptcg-d
 import type { CatalogSpecies, DeckDraftAnalysis } from "./deck-library";
 import type { ArchetypeRef, Deck } from "./tauri";
 
-import { deriveArchetypeLabel, findSpecies, speciesLabelFor } from "./deck-library";
+import { ARCHETYPES, deriveArchetypeLabel, findSpecies, speciesSlots } from "./deck-library";
 
 export interface DeckDraft {
   archetypeId: null | string;
@@ -33,39 +33,36 @@ export const BLANK_DECK_DRAFT: DeckDraft = {
 };
 
 export function applyCatalogArchetype(draft: DeckDraft, archetype: CatalogArchetype): DeckDraft {
-  const cards = archetype.cards;
   return {
     ...draft,
     archetypeId: archetype.id,
     archetypeLabel: archetype.label,
-    archetypeSpecies: [
-      cards[0] === undefined ? "" : speciesLabelFor(cards[0]),
-      cards[1] === undefined ? "" : speciesLabelFor(cards[1]),
-    ],
+    archetypeSpecies: speciesSlots(archetype.cards),
     formatLabel: archetype.window,
     labelEdited: false,
   };
 }
 
 export function applySuggestedArchetype(draft: DeckDraft, suggestion: ArchetypeSuggestion): DeckDraft {
-  const cards = suggestion.cards;
   return {
     ...draft,
-    archetypeId: suggestion.id,
+    archetypeId: null,
     archetypeLabel: suggestion.label,
-    archetypeSpecies: [
-      cards[0] === undefined ? "" : speciesLabelFor(cards[0]),
-      cards[1] === undefined ? "" : speciesLabelFor(cards[1]),
-    ],
+    archetypeSpecies: speciesSlots(suggestion.cards),
     labelEdited: false,
   };
 }
 
 export function archetypeFromDraft(draft: DeckDraft): ArchetypeRef | null {
-  const cards = draft.archetypeSpecies
-    .map((value) => (value.trim() === "" ? null : findSpecies(value)))
-    .filter((species): species is CatalogSpecies => species !== null && species !== undefined)
-    .map((species) => species.slug);
+  const resolved = draft.archetypeSpecies.map((value) => (value.trim() === "" ? null : findSpecies(value)));
+  if (resolved.some((species) => species === undefined)) return null;
+  const cards = [
+    ...new Set(
+      resolved
+        .filter((species): species is CatalogSpecies => species !== null && species !== undefined)
+        .map((species) => species.slug),
+    ),
+  ];
   const label = draft.archetypeLabel.trim();
   if (cards.length === 0 && label === "") return null;
   return { cards, id: draft.archetypeId, label };
@@ -113,17 +110,22 @@ export function deckDraftErrors(analysis: DeckDraftAnalysis, draft: DeckDraft): 
   };
 }
 
+export function deriveArchetypeLabelIfNeeded(draft: DeckDraft): DeckDraft {
+  if (draft.archetypeLabel.trim() !== "") return draft;
+  const label = deriveArchetypeLabel(draft.archetypeSpecies);
+  if (label === "") return draft;
+  return { ...draft, archetypeLabel: label, labelEdited: false };
+}
+
 export function draftFromDeck(deck: Deck): DeckDraft {
   const version = deck.currentVersion;
   const archetype = version.archetype;
-  const cards = archetype?.cards ?? [];
+  const storedId = archetype?.id ?? null;
+  const archetypeId = storedId !== null && ARCHETYPES.some((entry) => entry.id === storedId) ? storedId : null;
   return {
-    archetypeId: archetype?.id ?? null,
+    archetypeId,
     archetypeLabel: archetype?.label ?? "",
-    archetypeSpecies: [
-      cards[0] === undefined ? "" : speciesLabelFor(cards[0]),
-      cards[1] === undefined ? "" : speciesLabelFor(cards[1]),
-    ],
+    archetypeSpecies: speciesSlots(archetype?.cards ?? []),
     formatLabel: version.formatLabel ?? "",
     labelEdited: archetype !== null && archetype.id === null,
     name: deck.name,
@@ -143,6 +145,11 @@ export function setArchetypeLabel(draft: DeckDraft, label: string): DeckDraft {
 export function setArchetypeSlot(draft: DeckDraft, index: number, value: string): DeckDraft {
   const slots = [draft.archetypeSpecies[0] ?? "", draft.archetypeSpecies[1] ?? ""];
   slots[index] = value;
+  const selected = findSpecies(value);
+  if (selected !== undefined) {
+    const other = index === 0 ? 1 : 0;
+    if (findSpecies(slots[other] ?? "")?.slug === selected.slug) slots[other] = "";
+  }
   const species = slots.filter((slot) => slot.trim() !== "");
   return {
     ...draft,

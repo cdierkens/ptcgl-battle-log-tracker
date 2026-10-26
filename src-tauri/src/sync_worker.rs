@@ -45,7 +45,6 @@ struct DeckPayload<'a> {
     format: &'a str,
     archetype: Option<&'a ArchetypeRef>,
     opponent_archetype: Option<&'a ArchetypeRef>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     identity: Option<DeckIdentity<'a>>,
 }
 
@@ -512,7 +511,7 @@ mod tests {
         assert_eq!(json["deck"]["archetype"]["label"], "Custom");
         assert_eq!(json["deck"]["archetype"]["id"], serde_json::Value::Null);
         assert_eq!(json["deck"]["archetype"]["cards"], serde_json::json!(["dragapult"]));
-        assert!(json["deck"].get("identity").is_none());
+        assert_eq!(json["deck"]["identity"], serde_json::Value::Null);
     }
 
     #[test]

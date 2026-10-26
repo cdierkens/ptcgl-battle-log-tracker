@@ -21,6 +21,7 @@ import {
   BLANK_DECK_DRAFT,
   type DeckDraft,
   deckDraftErrors,
+  deriveArchetypeLabelIfNeeded,
   draftFromDeck,
 } from "../lib/deck-draft";
 import { analyzeDeckDraft, deckSource, identityOf } from "../lib/deck-library";
@@ -63,8 +64,10 @@ export function DecksTab() {
   };
 
   const save = async () => {
+    const draftToSave = deriveArchetypeLabelIfNeeded(draft);
+    if (draftToSave !== draft) setDraft(draftToSave);
     setShowErrors(true);
-    const currentErrors = deckDraftErrors(analysis, draft);
+    const currentErrors = deckDraftErrors(analysis, draftToSave);
     const firstError =
       currentErrors.name ?? currentErrors.decklist ?? currentErrors.format ?? currentErrors.archetype;
     if (firstError !== null) {
@@ -73,20 +76,21 @@ export function DecksTab() {
     }
 
     try {
-      const identity = analysis.kind === "valid" ? await identityOf(analysis.preview.deck) : null;
+      const preview = analysis.kind === "valid" ? analysis.preview : null;
+      const identity = preview === null ? null : await identityOf(preview.deck);
       const input: SaveDeckInput = {
-        archetype: archetypeFromDraft(draft),
+        archetype: archetypeFromDraft(draftToSave),
         catalogContextId: identity?.catalogContextId ?? null,
         catalogVersion: identity?.catalogVersion ?? null,
         deckIdHash: identity?.deckId ?? null,
-        decklistText: analysis.kind === "valid" ? analysis.preview.decklist : "",
-        formatLabel: draft.formatLabel.trim() === "" ? null : draft.formatLabel.trim(),
+        decklistText: preview?.decklist ?? "",
+        formatLabel: draftToSave.formatLabel.trim() === "" ? null : draftToSave.formatLabel.trim(),
         hashVersion: identity?.hashVersion ?? null,
         id: editing?.id,
         listIdHash: identity?.listId ?? null,
-        name: draft.name.trim(),
-        rawText: analysis.kind === "valid" ? draft.text : "",
-        source: deckSource(draft.text),
+        name: draftToSave.name.trim(),
+        rawText: preview === null ? "" : draftToSave.text,
+        source: deckSource(draftToSave.text),
       };
 
       const saved = await decks.save(input);

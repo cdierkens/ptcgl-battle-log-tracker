@@ -15,6 +15,7 @@ import {
   applyCatalogArchetype,
   applySuggestedArchetype,
   clearArchetype,
+  deriveArchetypeLabelIfNeeded,
   setArchetypeLabel,
   setArchetypeSlot,
 } from "../lib/deck-draft";
@@ -61,6 +62,10 @@ export function DeckForm({
         : "";
   const suggestionIds = new Set(suggestions.map((suggestion) => suggestion.id));
   const catalogOptions = ARCHETYPES.filter((archetype) => !suggestionIds.has(archetype.id));
+  const catalogGroups = FORMAT_WINDOWS.map((window) => ({
+    options: catalogOptions.filter((archetype) => archetype.window === window),
+    window,
+  })).filter((group) => group.options.length > 0);
   const formatCandidates = preview?.formatCandidates ?? FORMAT_WINDOWS;
   const formatValue = draft.formatLabel.trim();
   const formatDescription =
@@ -162,13 +167,15 @@ export function DeckForm({
               ))}
             </optgroup>
           ) : null}
-          <optgroup label="All archetypes">
-            {catalogOptions.map((archetype) => (
-              <option key={archetype.id} value={archetype.id}>
-                {archetype.label} · {archetype.window}
-              </option>
-            ))}
-          </optgroup>
+          {catalogGroups.map((group) => (
+            <optgroup key={group.window} label={group.window}>
+              {group.options.map((archetype) => (
+                <option key={archetype.id} value={archetype.id}>
+                  {archetype.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
         <FieldDescription>
           Select a catalog archetype, or enter up to two Pokémon below.
@@ -180,6 +187,7 @@ export function DeckForm({
         <FieldLabel htmlFor="deck-archetype-label">Archetype label</FieldLabel>
         <Input
           id="deck-archetype-label"
+          onBlur={() => onChange(deriveArchetypeLabelIfNeeded(draft))}
           onChange={(event) => onChange(setArchetypeLabel(draft, event.target.value))}
           placeholder="Dragapult / Dusknoir"
           value={draft.archetypeLabel}
@@ -193,6 +201,7 @@ export function DeckForm({
             <Input
               id={`deck-species-${index}`}
               list="deck-species-candidates"
+              onBlur={() => onChange(deriveArchetypeLabelIfNeeded(draft))}
               onChange={(event) => onChange(setArchetypeSlot(draft, index, event.target.value))}
               placeholder="Search a Pokémon"
               value={draft.archetypeSpecies[index] ?? ""}

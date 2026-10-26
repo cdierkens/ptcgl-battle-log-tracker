@@ -9,19 +9,15 @@ import {
   BLANK_DECK_DRAFT,
   clearArchetype,
   deckDraftErrors,
+  deriveArchetypeLabelIfNeeded,
   draftFromDeck,
   setArchetypeLabel,
   setArchetypeSlot,
 } from "./deck-draft";
-import { ARCHETYPES, speciesLabelFor } from "./deck-library";
+import { ARCHETYPES, speciesSlots } from "./deck-library";
 
 const DRAGAPULT = ARCHETYPES.find((archetype) => archetype.label === "Dragapult ex");
 if (DRAGAPULT === undefined) throw new Error("catalog is missing Dragapult ex");
-
-const slotsFor = (archetype: typeof DRAGAPULT) => [
-  archetype.cards[0] === undefined ? "" : speciesLabelFor(archetype.cards[0]),
-  archetype.cards[1] === undefined ? "" : speciesLabelFor(archetype.cards[1]),
-];
 
 const deck: Deck = {
   archivedAt: null,
@@ -49,7 +45,7 @@ describe("draftFromDeck", () => {
   it("maps a catalog archetype into editable species names", () => {
     const draft = draftFromDeck(deck);
     expect(draft.archetypeId).toBe(DRAGAPULT.id);
-    expect(draft.archetypeSpecies).toEqual(slotsFor(DRAGAPULT));
+    expect(draft.archetypeSpecies).toEqual(speciesSlots(DRAGAPULT.cards));
     expect(draft.formatLabel).toBe("TEF-30C");
     expect(draft.labelEdited).toBe(false);
   });
@@ -64,6 +60,17 @@ describe("draftFromDeck", () => {
     };
     expect(draftFromDeck(customDeck).labelEdited).toBe(true);
   });
+
+  it("drops a stored id that is not in the catalog", () => {
+    const syntheticDeck: Deck = {
+      ...deck,
+      currentVersion: {
+        ...deck.currentVersion,
+        archetype: { cards: ["dragapult"], id: "synthetic:1", label: "Synthetic" },
+      },
+    };
+    expect(draftFromDeck(syntheticDeck).archetypeId).toBeNull();
+  });
 });
 
 describe("archetype draft transitions", () => {
@@ -71,7 +78,7 @@ describe("archetype draft transitions", () => {
     const draft = applyCatalogArchetype(BLANK_DECK_DRAFT, DRAGAPULT);
     expect(draft.archetypeId).toBe(DRAGAPULT.id);
     expect(draft.archetypeLabel).toBe(DRAGAPULT.label);
-    expect(draft.archetypeSpecies).toEqual(slotsFor(DRAGAPULT));
+    expect(draft.archetypeSpecies).toEqual(speciesSlots(DRAGAPULT.cards));
     expect(draft.formatLabel).toBe(DRAGAPULT.window);
     expect(draft.labelEdited).toBe(false);
   });
@@ -82,6 +89,12 @@ describe("archetype draft transitions", () => {
     expect(edited.archetypeId).toBeNull();
     expect(edited.archetypeSpecies).toEqual(["Dragapult", "Dusknoir"]);
     expect(edited.archetypeLabel).toBe("Dragapult / Dusknoir");
+  });
+
+  it("clears the other slot when the same species is chosen", () => {
+    const first = setArchetypeSlot(BLANK_DECK_DRAFT, 0, "Dragapult");
+    const duplicate = setArchetypeSlot(first, 1, "Dragapult");
+    expect(duplicate.archetypeSpecies).toEqual(["", "Dragapult"]);
   });
 
   it("keeps a manually edited label on later slot edits", () => {
@@ -120,6 +133,29 @@ describe("archetype draft transitions", () => {
 
   it("returns null for an empty archetype", () => {
     expect(archetypeFromDraft(BLANK_DECK_DRAFT)).toBeNull();
+  });
+
+  it("returns null when a species is not in the catalog", () => {
+    const draft = { ...BLANK_DECK_DRAFT, archetypeLabel: "X", archetypeSpecies: ["Not a Pokémon", ""] };
+    expect(archetypeFromDraft(draft)).toBeNull();
+  });
+
+  it("de-duplicates species before saving", () => {
+    const draft = { ...BLANK_DECK_DRAFT, archetypeLabel: "X", archetypeSpecies: ["Dragapult", "Dragapult"] };
+    expect(archetypeFromDraft(draft)).toEqual({ cards: ["dragapult"], id: null, label: "X" });
+  });
+
+  it("derives a cleared label on blur", () => {
+    const catalogDraft = applyCatalogArchetype(BLANK_DECK_DRAFT, DRAGAPULT);
+    const cleared = setArchetypeLabel(catalogDraft, "");
+    const derived = deriveArchetypeLabelIfNeeded(cleared);
+    expect(derived.archetypeLabel).toBe("Dragapult");
+    expect(derived.labelEdited).toBe(false);
+  });
+
+  it("leaves a non-empty label alone on blur", () => {
+    const labeled = setArchetypeLabel(BLANK_DECK_DRAFT, "My Dragapult");
+    expect(deriveArchetypeLabelIfNeeded(labeled)).toBe(labeled);
   });
 });
 

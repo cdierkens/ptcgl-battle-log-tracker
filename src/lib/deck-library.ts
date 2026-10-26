@@ -54,7 +54,7 @@ const CATALOG = catalog;
 const titleCase = (value: string) =>
   value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
 
-function speciesLabel(slug: string): string {
+function titleCaseSlug(slug: string): string {
   const parts = slug.split("-").filter((part) => part !== "");
   const mega = parts.indexOf("mega");
   if (mega >= 0) {
@@ -66,7 +66,7 @@ function speciesLabel(slug: string): string {
 const SPECIES_BY_SLUG = new Map<string, CatalogSpecies>();
 for (const card of CATALOG.cards) {
   if (card.species === null || SPECIES_BY_SLUG.has(card.species)) continue;
-  SPECIES_BY_SLUG.set(card.species, { label: speciesLabel(card.species), slug: card.species });
+  SPECIES_BY_SLUG.set(card.species, { label: titleCaseSlug(card.species), slug: card.species });
 }
 
 export const SPECIES: readonly CatalogSpecies[] = [...SPECIES_BY_SLUG.values()].sort((left, right) =>
@@ -153,6 +153,14 @@ export function isFormatWindow(label: string): boolean {
 }
 
 export function speciesLabelFor(slug: string): string {
-  return SPECIES_BY_SLUG.get(slug)?.label ?? speciesLabel(slug);
+  return SPECIES_BY_SLUG.get(slug)?.label ?? titleCaseSlug(slug);
+}
+
+/** The two display slots for an archetype's 0–2 species slugs. */
+export function speciesSlots(cards: readonly string[]): string[] {
+  return [
+    cards[0] === undefined ? "" : speciesLabelFor(cards[0]),
+    cards[1] === undefined ? "" : speciesLabelFor(cards[1]),
+  ];
 }
 

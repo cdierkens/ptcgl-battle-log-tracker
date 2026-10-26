@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeDeckDraft,
   analyzeDecklist,
+  ARCHETYPES,
   deckSource,
   deriveArchetypeLabel,
   findSpecies,
@@ -11,6 +12,7 @@ import {
   isFormatWindow,
   SPECIES,
   speciesLabelFor,
+  speciesSlots,
 } from "./deck-library";
 
 const DRAGAPULT = `Pokémon: 1
@@ -127,8 +129,12 @@ describe("deckSource", () => {
 });
 
 describe("species catalog", () => {
+  it("exposes the shipped catalog counts", () => {
+    expect(SPECIES).toHaveLength(112);
+    expect(ARCHETYPES).toHaveLength(163);
+  });
+
   it("exposes unique labels and slugs", () => {
-    expect(SPECIES.length).toBeGreaterThan(0);
     expect(new Set(SPECIES.map((species) => species.slug)).size).toBe(SPECIES.length);
     expect(new Set(SPECIES.map((species) => species.label)).size).toBe(SPECIES.length);
   });
@@ -147,5 +153,10 @@ describe("species catalog", () => {
 
   it("exposes the catalog windows", () => {
     expect(FORMAT_WINDOWS).toContain("TEF-30C");
+  });
+
+  it("builds two display slots", () => {
+    expect(speciesSlots(["dragapult"])).toEqual(["Dragapult", ""]);
+    expect(speciesSlots(["dragapult", "blaziken"])).toEqual(["Dragapult", "Blaziken"]);
   });
 });
